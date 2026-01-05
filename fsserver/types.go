@@ -28,3 +28,13 @@ type Page[T any] struct {
 	Offset  int
 	Total   int
 }
+
+type FileFilterFn func(meta FileMetaEntry) bool
+
+type Storage interface {
+	Put(entry *FileUpload, overwrite bool) (*FileMetaEntry, error)
+	Get(name string) (*File, error)
+	Move(oldPath string, newPath string, overwrite bool) (*FileMetaEntry, error)
+	Delete(name string) error
+	Find(filter FileFilterFn) ([]FileMetaEntry, error)
+}
