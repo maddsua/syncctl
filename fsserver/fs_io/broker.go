@@ -96,7 +96,7 @@ func (broker *FsBroker) List(ctx context.Context, pathPrefix, fileExt string, af
 			return nil
 		}
 
-		hash, err := hashFileSHA256(nextPath, mtime)
+		hash, err := fileNameHashSha256(nextPath, mtime)
 		if err != nil {
 			return fmt.Errorf("hash file '%s': %v", scopedPath, err)
 		}
@@ -146,6 +146,8 @@ func (broker *FsBroker) Put(ctx context.Context, entry *fsserver.FileUpload, ove
 	if err := mkParentPath(distPath); err != nil {
 		return nil, err
 	}
+
+	//	todo: write and hash
 
 	var writeFile = func(dest string) error {
 
@@ -361,90 +363,89 @@ func mkParentPath(val string) error {
 	return os.MkdirAll(dir, os.ModePerm)
 }
 
-//	todo: slightly refactor
+func fileNameHashSha256(name string, mtime time.Time) (string, error) {
 
-func hashFileSHA256(baseFile string, baseFileMtime time.Time) (string, error) {
-
-	cachePath := baseFile + HashFileExt
-
-	var readCached = func() (string, error) {
-
-		stat, err := os.Stat(cachePath)
-		if err != nil || stat.ModTime() != baseFileMtime {
-			return "", nil
-		}
-
-		file, err := os.Open(cachePath)
-		if err != nil {
-			return "", err
-		}
-		defer file.Close()
-
-		data, err := io.ReadAll(file)
-		if err != nil {
-			return "", err
-		}
-
-		hash, err := hex.DecodeString(strings.TrimSpace(string(data)))
-		if err != nil {
-			return "", err
-		}
-
-		return hex.EncodeToString(hash), nil
-	}
-
-	var storeCached = func(val string) (string, error) {
-
-		var writeFile = func() error {
-
-			file, err := os.Create(cachePath)
-			if err != nil {
-				return nil
-			}
-
-			defer file.Close()
-
-			_, err = file.WriteString(val)
-			return err
-		}
-
-		if err := writeFile(); err != nil {
-			return "", err
-		}
-
-		if err := os.Chtimes(cachePath, baseFileMtime, baseFileMtime); err != nil {
-			return "", err
-		}
-
+	if val, _ := readCachedFileHash(name, mtime); val != "" {
 		return val, nil
 	}
 
-	var hashFile = func() (string, error) {
-
-		file, err := os.Open(baseFile)
-		if err != nil {
-			return "", err
-		}
-
-		defer file.Close()
-
-		hasher := sha256.New()
-
-		if _, err := io.Copy(hasher, file); err != nil {
-			return "", err
-		}
-
-		return hex.EncodeToString(hasher.Sum(nil)), nil
-	}
-
-	if val, _ := readCached(); val != "" {
-		return val, nil
-	}
-
-	hash, err := hashFile()
+	file, err := os.Open(name)
 	if err != nil {
 		return "", err
 	}
 
-	return storeCached(hash)
+	defer file.Close()
+
+	hash, err := fileHashSha256(file)
+	if err != nil {
+		return "", err
+	}
+
+	return storeCachedFileHash(name, hash, mtime)
+}
+
+func readCachedFileHash(name string, mtime time.Time) (string, error) {
+
+	name = name + HashFileExt
+
+	if stat, _ := os.Stat(name); stat == nil || stat.ModTime() != mtime {
+		return "", nil
+	}
+
+	file, err := os.Open(name)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return "", err
+	}
+
+	hash, err := hex.DecodeString(strings.TrimSpace(string(data)))
+	if err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(hash), nil
+}
+
+func fileHashSha256(file *os.File) (string, error) {
+
+	hasher := sha256.New()
+
+	if _, err := io.Copy(hasher, file); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+func storeCachedFileHash(name, val string, mtime time.Time) (string, error) {
+
+	name = name + HashFileExt
+
+	var writeFile = func() error {
+
+		file, err := os.Create(name)
+		if err != nil {
+			return nil
+		}
+
+		defer file.Close()
+
+		_, err = file.WriteString(val)
+		return err
+	}
+
+	if err := writeFile(); err != nil {
+		return "", err
+	}
+
+	if err := os.Chtimes(name, mtime, mtime); err != nil {
+		return "", err
+	}
+
+	return val, nil
 }
