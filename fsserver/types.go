@@ -16,9 +16,10 @@ type FileUpload struct {
 }
 
 type FileMetaEntry struct {
-	Name string
-	Date time.Time
-	Size int64
+	Name   string
+	Date   time.Time
+	Size   int64
+	SHA256 string
 }
 
 type Page[T any] struct {
