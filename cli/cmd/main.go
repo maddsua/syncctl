@@ -1,0 +1,64 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/maddsua/syncctl/fsserver/fs_io"
+)
+
+func main() {
+
+	broker := fs_io.FsBroker{
+		RootDir: "data",
+		TmpDir:  "tmp",
+	}
+
+	/* file, err := broker.Put(context.Background(), &fsserver.FileUpload{
+		FileMetaEntry: fsserver.FileMetaEntry{
+			Name: "/application-shit/some-lame-file.bin",
+			Date: time.Unix(5000, 0),
+			Size: 4,
+		},
+		Reader: bytes.NewReader([]byte("test")),
+	}, true)
+
+	if err != nil {
+		fmt.Println("ERR", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("FILE", file) */
+
+	page, err := broker.List(context.Background(), "", "", time.Time{}, time.Time{}, 0, 0)
+
+	if err != nil {
+		fmt.Println("ERR", err)
+		os.Exit(1)
+	}
+
+	for _, entry := range page.Entries {
+		fmt.Println(">", entry)
+	}
+
+	/*
+
+		file, err := broker.Get(context.Background(), "/mytextfile.txt")
+		if err != nil {
+			fmt.Println("ERR", err)
+			os.Exit(1)
+		}
+
+		defer file.Close()
+		fmt.Println("FILE", file)
+
+		text, err := io.ReadAll(file)
+		if err != nil {
+			fmt.Println("ERR", err)
+			os.Exit(1)
+		}
+
+		fmt.Println("TEXT", string(text)) */
+}
