@@ -216,16 +216,20 @@ func (broker *FsBroker) Get(ctx context.Context, name string) (*fsserver.File, e
 		return nil, err
 	}
 
-	//	todo: hash
+	hash, err := fileDescriptorHashSha256(file)
+	if err != nil {
+		return nil, err
+	}
 
 	//	manually add one more to make sure we will wait until all operations are complete
 	broker.wg.Add(1)
 
 	return &fsserver.File{
 		FileMetaEntry: fsserver.FileMetaEntry{
-			Name: cleanNestedPath(name),
-			Date: stat.ModTime(),
-			Size: stat.Size(),
+			Name:   cleanNestedPath(name),
+			Date:   stat.ModTime(),
+			Size:   stat.Size(),
+			SHA256: hash,
 		},
 		ReadSeekCloser: &fileReader{
 			File:      file,
@@ -378,6 +382,37 @@ func fileNameHashSha256(name string, mtime time.Time) (string, error) {
 
 	hash, err := fileHashSha256(file)
 	if err != nil {
+		return "", err
+	}
+
+	return storeCachedFileHash(name, hash, mtime)
+}
+
+func fileDescriptorHashSha256(file *os.File) (string, error) {
+
+	name := file.Name()
+
+	stat, err := file.Stat()
+	if err != nil {
+		return "", err
+	}
+
+	mtime := stat.ModTime()
+
+	if val, _ := readCachedFileHash(name, mtime); val != "" {
+		return val, nil
+	}
+
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return "", err
+	}
+
+	hash, err := fileHashSha256(file)
+	if err != nil {
+		return "", err
+	}
+
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		return "", err
 	}
 
