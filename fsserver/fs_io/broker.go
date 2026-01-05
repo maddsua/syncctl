@@ -17,6 +17,9 @@ import (
 	"github.com/maddsua/syncctl/fsserver"
 )
 
+//	todo: make sure there isn't any funny business going on with file hashes
+//	todo: just wrap this thing in a tar duh
+
 var ErrClosed = errors.New("broker closed")
 var ErrNoFile = errors.New("file doesn't exist")
 var ErrFileExists = errors.New("file already exists")
@@ -24,13 +27,31 @@ var ErrFileExists = errors.New("file already exists")
 var PartFileExt = ".uploadpart"
 var HashFileExt = ".uploadhash"
 
-func IsReservedExtension(val string) bool {
-	switch path.Ext(val) {
+func IsReservedExtension(name string) bool {
+	switch path.Ext(name) {
 	case PartFileExt, HashFileExt:
 		return true
 	default:
 		return false
 	}
+}
+
+func RemoveReservedExtensions(name string) error {
+
+	for _, ext := range []string{HashFileExt} {
+
+		next := name + ext
+
+		if _, err := os.Stat(next); err != nil {
+			continue
+		}
+
+		if err := os.Remove(next); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 type FsBroker struct {
@@ -188,6 +209,8 @@ func (broker *FsBroker) Put(ctx context.Context, entry *fsserver.FileUpload, ove
 		return nil, err
 	}
 
+	_ = RemoveReservedExtensions(distPath)
+
 	return &fsserver.FileMetaEntry{
 		Name:   cleanNestedPath(entry.Name),
 		Date:   entry.Date,
@@ -280,6 +303,8 @@ func (broker *FsBroker) Move(ctx context.Context, oldPath, newPath string, overw
 		return nil, err
 	}
 
+	_ = RemoveReservedExtensions(dst)
+
 	return &entry, nil
 }
 
@@ -304,6 +329,8 @@ func (broker *FsBroker) Delete(ctx context.Context, name string) error {
 	if err := os.Remove(fsPath); err != nil {
 		return err
 	}
+
+	_ = RemoveReservedExtensions(fsPath)
 
 	return nil
 }
@@ -387,7 +414,7 @@ func fileNameHashSha256(name string, mtime time.Time) (string, error) {
 		return "", err
 	}
 
-	return storeCachedFileHash(name, hash, mtime)
+	return writeCachedFileHash(name, hash, mtime)
 }
 
 func fileDescriptorHashSha256(file *os.File) (string, error) {
@@ -418,7 +445,7 @@ func fileDescriptorHashSha256(file *os.File) (string, error) {
 		return "", err
 	}
 
-	return storeCachedFileHash(name, hash, mtime)
+	return writeCachedFileHash(name, hash, mtime)
 }
 
 func readCachedFileHash(name string, mtime time.Time) (string, error) {
@@ -459,7 +486,7 @@ func fileHashSha256(file *os.File) (string, error) {
 	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
-func storeCachedFileHash(name, val string, mtime time.Time) (string, error) {
+func writeCachedFileHash(name, val string, mtime time.Time) (string, error) {
 
 	name = name + HashFileExt
 
