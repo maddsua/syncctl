@@ -147,33 +147,34 @@ func (broker *FsBroker) Put(ctx context.Context, entry *fsserver.FileUpload, ove
 		return nil, err
 	}
 
-	//	todo: write and hash
-
-	var writeFile = func(dest string) error {
+	var writeFile = func(dest string) (string, error) {
 
 		file, err := os.Create(dest)
 		if err != nil {
-			return err
+			return "", err
 		}
 
 		defer file.Close()
 
 		//	short-circuit to avoid unnecessary io calls
 		if entry.Size == 0 || entry.Reader == nil {
-			return nil
+			return "", nil
 		}
 
-		if n, err := io.Copy(file, entry.Reader); err != nil {
-			return err
+		hasher := sha256.New()
+
+		if n, err := io.Copy(file, io.TeeReader(entry.Reader, hasher)); err != nil {
+			return "", err
 		} else if n != entry.Size {
-			return fmt.Errorf("unexpected blob size %d instead of %d", n, entry.Size)
+			return "", fmt.Errorf("unexpected blob size %d instead of %d", n, entry.Size)
 		}
 
-		return nil
+		return hex.EncodeToString(hasher.Sum(nil)), nil
 	}
 
 	tempPath := path.Join(broker.RootDir, entry.Name+PartFileExt)
-	if err := writeFile(tempPath); err != nil {
+	hash, err := writeFile(tempPath)
+	if err != nil {
 		_ = os.Remove(tempPath)
 		return nil, err
 	}
@@ -188,9 +189,10 @@ func (broker *FsBroker) Put(ctx context.Context, entry *fsserver.FileUpload, ove
 	}
 
 	return &fsserver.FileMetaEntry{
-		Name: cleanNestedPath(entry.Name),
-		Date: entry.Date,
-		Size: entry.Size,
+		Name:   cleanNestedPath(entry.Name),
+		Date:   entry.Date,
+		Size:   entry.Size,
+		SHA256: hash,
 	}, nil
 }
 
