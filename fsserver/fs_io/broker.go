@@ -19,11 +19,19 @@ var ErrClosed = errors.New("broker closed")
 var ErrNoFile = errors.New("file doesn't exist")
 var ErrFileExists = errors.New("file already exists")
 
-var PartFileExt = ".part"
+var PartFileExt = ".uploadpart"
+
+func IsForbiddenExtension(val string) bool {
+	switch path.Ext(val) {
+	case PartFileExt:
+		return true
+	default:
+		return false
+	}
+}
 
 type FsBroker struct {
 	RootDir string
-	TmpDir  string
 	wg      sync.WaitGroup
 	lock    sync.Mutex
 	done    atomic.Bool
@@ -105,6 +113,8 @@ func (broker *FsBroker) Put(ctx context.Context, entry *fsserver.FileUpload, ove
 
 	if entry.Name == "" {
 		return nil, fmt.Errorf("empty file name")
+	} else if IsForbiddenExtension(entry.Name) {
+		return nil, fmt.Errorf("forbidden file extension (reserved)")
 	}
 
 	if broker.done.Load() {
@@ -120,6 +130,10 @@ func (broker *FsBroker) Put(ctx context.Context, entry *fsserver.FileUpload, ove
 		if _, err := os.Stat(distPath); err == nil {
 			return nil, ErrFileExists
 		}
+	}
+
+	if err := mkParentPath(distPath); err != nil {
+		return nil, err
 	}
 
 	var writeFile = func(dest string) error {
@@ -149,15 +163,9 @@ func (broker *FsBroker) Put(ctx context.Context, entry *fsserver.FileUpload, ove
 		return nil
 	}
 
-	tempPath := path.Join(broker.TmpDir, entry.Name, PartFileExt)
-
-	if err := mkParentPath(tempPath); err != nil {
-		return nil, err
-	} else if err := mkParentPath(distPath); err != nil {
-		return nil, err
-	}
-
+	tempPath := path.Join(broker.RootDir, entry.Name+PartFileExt)
 	if err := writeFile(tempPath); err != nil {
+		_ = os.Remove(tempPath)
 		return nil, err
 	}
 

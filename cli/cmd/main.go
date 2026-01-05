@@ -13,16 +13,15 @@ func main() {
 
 	broker := fs_io.FsBroker{
 		RootDir: "data",
-		TmpDir:  "tmp",
 	}
 
 	/* file, err := broker.Put(context.Background(), &fsserver.FileUpload{
 		FileMetaEntry: fsserver.FileMetaEntry{
-			Name: "/application-shit/some-lame-file.bin",
+			Name: "/application-shit/some-lame-file-2.txt",
 			Date: time.Unix(5000, 0),
-			Size: 4,
+			Size: 6,
 		},
-		Reader: bytes.NewReader([]byte("test")),
+		Reader: bytes.NewReader([]byte("test 2")),
 	}, true)
 
 	if err != nil {
