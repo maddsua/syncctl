@@ -1,7 +1,9 @@
 package blobstorage
 
 import (
+	"archive/tar"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path"
@@ -12,15 +14,23 @@ import (
 	"github.com/maddsua/syncctl/fsserver"
 )
 
+var ErrClosed = errors.New("storage closed")
+
+const FileExtBlob = ".blob"
+const FileExtPartial = ".part"
+
 func CleanRelativePath(val string) string {
 	const separator = "/"
 	return path.Clean(separator + strings.TrimRight(val, separator))
 }
 
-var ErrClosed = errors.New("storage closed")
+func BlobPath(root, name string) string {
+	return path.Join(root, CleanRelativePath(name)+FileExtBlob)
+}
 
-const FileExtBlob = ".blob"
-const FileExtPartial = ".part"
+func TempBlobPath(root, name string) string {
+	return path.Join(root, CleanRelativePath(name)+FileExtBlob+FileExtPartial)
+}
 
 type Storage struct {
 	RootDir string
@@ -42,7 +52,7 @@ func (storage *Storage) Put(entry *fsserver.FileUpload, overwrite bool) (*fsserv
 		return nil, fsserver.ErrInvalidFileName
 	}
 
-	blobPath := path.Join(storage.RootDir, entry.Name+FileExtBlob)
+	blobPath := BlobPath(storage.RootDir, entry.Name)
 
 	if _, err := os.Stat(blobPath); err == nil && !overwrite {
 		return nil, fsserver.ErrFileConflict
@@ -52,7 +62,7 @@ func (storage *Storage) Put(entry *fsserver.FileUpload, overwrite bool) (*fsserv
 		return nil, err
 	}
 
-	tempBlobPath := blobPath + FileExtPartial
+	tempBlobPath := TempBlobPath(storage.RootDir, entry.Name)
 	if meta, err := WriteUploadAsBlob(tempBlobPath, entry); err != nil {
 		return nil, err
 	} else {
@@ -64,4 +74,47 @@ func (storage *Storage) Put(entry *fsserver.FileUpload, overwrite bool) (*fsserv
 	}
 
 	return &entry.FileMetadata, nil
+}
+
+func (storage *Storage) Get(name string) (*fsserver.ReadableFile, error) {
+
+	if storage.done.Load() {
+		return nil, ErrClosed
+	}
+
+	//	automatic wg controls
+	storage.wg.Add(1)
+	defer storage.wg.Done()
+
+	blobPath := BlobPath(storage.RootDir, name)
+
+	stat, err := os.Stat(blobPath)
+	if err != nil || !stat.Mode().IsRegular() {
+		return nil, fsserver.ErrNoFile
+	}
+
+	file, err := os.Open(blobPath)
+	if err != nil {
+		return nil, err
+	}
+
+	info, err := ReadBlobInfo(tar.NewReader(file))
+	if err != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf("read blob info: %v", err)
+	}
+
+	//	todo: create a read-seeker that handles both file handle lifetime and content reading
+
+	//	manually add one more to make sure we will wait until all operations are complete
+	storage.wg.Add(1)
+
+	return &fsserver.ReadableFile{
+		FileMetadata: fsserver.FileMetadata{
+			Name:     CleanRelativePath(name),
+			Modified: info.Modified,
+			Size:     info.Size,
+			SHA256:   info.SHA256,
+		},
+	}, nil
 }

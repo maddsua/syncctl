@@ -123,10 +123,10 @@ func (broker *FsBroker) List(ctx context.Context, pathPrefix, fileExt string, af
 		}
 
 		page.Entries = append(page.Entries, fsserver.FileMetadata{
-			Name:   scopedPath,
-			Date:   mtime,
-			Size:   stat.Size(),
-			SHA256: hash,
+			Name:     scopedPath,
+			Modified: mtime,
+			Size:     stat.Size(),
+			SHA256:   hash,
 		})
 
 		page.Size++
@@ -200,7 +200,7 @@ func (broker *FsBroker) Put(ctx context.Context, entry *fsserver.FileUpload, ove
 		return nil, err
 	}
 
-	if err := os.Chtimes(tempPath, entry.Date, entry.Date); err != nil {
+	if err := os.Chtimes(tempPath, entry.Modified, entry.Modified); err != nil {
 		return nil, err
 	}
 
@@ -212,10 +212,10 @@ func (broker *FsBroker) Put(ctx context.Context, entry *fsserver.FileUpload, ove
 	_ = RemoveReservedExtensions(distPath)
 
 	return &fsserver.FileMetadata{
-		Name:   cleanNestedPath(entry.Name),
-		Date:   entry.Date,
-		Size:   entry.Size,
-		SHA256: hash,
+		Name:     cleanNestedPath(entry.Name),
+		Modified: entry.Modified,
+		Size:     entry.Size,
+		SHA256:   hash,
 	}, nil
 }
 
@@ -251,10 +251,10 @@ func (broker *FsBroker) Get(ctx context.Context, name string) (*fsserver.Readabl
 
 	return &fsserver.ReadableFile{
 		FileMetadata: fsserver.FileMetadata{
-			Name:   cleanNestedPath(name),
-			Date:   stat.ModTime(),
-			Size:   stat.Size(),
-			SHA256: hash,
+			Name:     cleanNestedPath(name),
+			Modified: stat.ModTime(),
+			Size:     stat.Size(),
+			SHA256:   hash,
 		},
 		ReadSeekCloser: &fileReader{
 			File:      file,
@@ -283,9 +283,9 @@ func (broker *FsBroker) Move(ctx context.Context, oldPath, newPath string, overw
 	}
 
 	entry := fsserver.FileMetadata{
-		Name: cleanNestedPath(newPath),
-		Date: stat.ModTime(),
-		Size: stat.Size(),
+		Name:     cleanNestedPath(newPath),
+		Modified: stat.ModTime(),
+		Size:     stat.Size(),
 	}
 
 	dst := path.Join(broker.RootDir, cleanNestedPath(newPath))

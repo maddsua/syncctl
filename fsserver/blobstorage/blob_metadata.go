@@ -7,9 +7,6 @@ import (
 	"io/fs"
 )
 
-const blobKeyMetadata = "metadat"
-const blobKeyData = "data"
-
 type BlobMetadata struct {
 	SHA256 string `json:"h"`
 }

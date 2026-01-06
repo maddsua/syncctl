@@ -17,10 +17,10 @@ type FileUpload struct {
 }
 
 type FileMetadata struct {
-	Name   string
-	Date   time.Time
-	Size   int64
-	SHA256 string
+	Name     string
+	Size     int64
+	Modified time.Time
+	SHA256   string
 }
 
 // todo: remove

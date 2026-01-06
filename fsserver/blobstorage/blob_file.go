@@ -8,11 +8,21 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"time"
 
 	"github.com/maddsua/syncctl/fsserver"
 )
 
-func WriteUploadAsBlob(name string, entry *fsserver.FileUpload) (*BlobMetadata, error) {
+const blobKeyMetadata = "metadat"
+const blobKeyData = "data"
+
+type BlobInfo struct {
+	BlobMetadata
+	Size     int64
+	Modified time.Time
+}
+
+func WriteUploadAsBlob(name string, entry *fsserver.FileUpload) (*BlobInfo, error) {
 
 	file, err := os.Create(name)
 	if err != nil {
@@ -28,9 +38,9 @@ func WriteUploadAsBlob(name string, entry *fsserver.FileUpload) (*BlobMetadata, 
 		Name:       blobKeyData,
 		Size:       entry.Size,
 		Mode:       int64(fs.ModePerm),
-		ModTime:    entry.Date,
-		AccessTime: entry.Date,
-		ChangeTime: entry.Date,
+		ModTime:    entry.Modified,
+		AccessTime: entry.Modified,
+		ChangeTime: entry.Modified,
 	}); err != nil {
 		return nil, fmt.Errorf("write data block header: %v", err)
 	}
@@ -57,5 +67,48 @@ func WriteUploadAsBlob(name string, entry *fsserver.FileUpload) (*BlobMetadata, 
 		return nil, fmt.Errorf("write metadata: %v", err)
 	}
 
-	return &meta, arc.Close()
+	return &BlobInfo{
+		BlobMetadata: meta,
+		Size:         entry.Size,
+		Modified:     entry.Modified,
+	}, arc.Close()
+}
+
+func ReadBlobInfo(reader *tar.Reader) (*BlobInfo, error) {
+
+	var info BlobInfo
+
+	readSet := map[string]struct{}{}
+
+	for {
+
+		entry, err := reader.Next()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, err
+		}
+
+		switch entry.Name {
+		case blobKeyData:
+			info = BlobInfo{
+				Size:     entry.Size,
+				Modified: entry.ModTime,
+			}
+			readSet[blobKeyData] = struct{}{}
+		case blobKeyMetadata:
+			if err := info.BlobMetadata.ReadTar(reader); err != nil {
+				return nil, err
+			}
+			readSet[blobKeyMetadata] = struct{}{}
+		}
+	}
+
+	if _, has := readSet[blobKeyData]; !has {
+		return nil, fmt.Errorf("blob data entry is missing")
+	} else if _, has := readSet[blobKeyMetadata]; !has {
+		return nil, fmt.Errorf("blob metdata entry is missing")
+	}
+
+	return &info, nil
 }
