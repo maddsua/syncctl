@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
-	"io"
 	"os"
+	"time"
 
+	"github.com/maddsua/syncctl/fsserver"
 	"github.com/maddsua/syncctl/fsserver/blobstorage"
 )
 
@@ -14,9 +16,9 @@ func main() {
 		RootDir: "data",
 	}
 
-	/* file, err := broker.Put(&fsserver.FileUpload{
+	file, err := broker.Put(&fsserver.FileUpload{
 		FileMetadata: fsserver.FileMetadata{
-			Name:     "/myfuckingdocs/verysecretshit.md",
+			Name:     "/docs/message-to-mr-white.md",
 			Modified: time.Now(),
 			Size:     15,
 		},
@@ -28,7 +30,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("FILE", file) */
+	fmt.Println("FILE", file)
 
 	/* page, err := broker.List(context.Background(), "", "", time.Time{}, time.Time{}, 0, 0)
 
@@ -41,20 +43,21 @@ func main() {
 		fmt.Println(">", entry)
 	} */
 
-	file, err := broker.Get("/myfuckingdocs/verysecretshit.md")
-	if err != nil {
-		fmt.Println("ERR", err)
-		os.Exit(1)
-	}
+	/* 	file, err := broker.Get("/docs/message-to-mr-white.md")
+	   	if err != nil {
+	   		fmt.Println("ERR", err)
+	   		os.Exit(1)
+	   	}
 
-	fmt.Println("FILE", file)
+	   	fmt.Println("FILE", file)
 
-	defer file.Close()
-	text, err := io.ReadAll(file)
-	if err != nil {
-		fmt.Println("ERR", err)
-		os.Exit(1)
-	}
+	   	defer file.Close()
+	   	text, err := io.ReadAll(file)
+	   	if err != nil {
+	   		fmt.Println("ERR", err)
+	   		os.Exit(1)
+	   	}
 
-	fmt.Println("TEXT", string(text))
+	   	fmt.Println("TEXT", string(text)) */
+
 }

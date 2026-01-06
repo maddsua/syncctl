@@ -98,3 +98,76 @@ func (storage *Storage) Get(name string) (*fsserver.ReadableFile, error) {
 		},
 	}, nil
 }
+
+func (storage *Storage) Stat(name string) (*fsserver.FileMetadata, error) {
+
+	blobPath := BlobPath(storage.RootDir, name)
+
+	if _, err := os.Stat(blobPath); err != nil {
+		return nil, fsserver.ErrNoFile
+	}
+
+	file, err := os.Open(blobPath)
+	if err != nil {
+		return nil, err
+	}
+
+	defer file.Close()
+
+	info, err := ReadBlobInfo(tar.NewReader(file))
+	if err != nil {
+		return nil, fmt.Errorf("read blob info: %v", err)
+	}
+
+	return &fsserver.FileMetadata{
+		Name:     CleanRelativePath(name),
+		Size:     info.Size,
+		Modified: info.Modified,
+		SHA256:   info.SHA256,
+	}, nil
+}
+
+func (storage *Storage) Move(name, newName string, overwrite bool) (*fsserver.FileMetadata, error) {
+
+	storage.lock.Lock()
+	defer storage.lock.Unlock()
+
+	stat, err := storage.Stat(name)
+	if err != nil {
+		return nil, err
+	}
+
+	blobPath := BlobPath(storage.RootDir, name)
+	newBlobPath := BlobPath(storage.RootDir, newName)
+	if _, err := os.Stat(newBlobPath); err == nil && !overwrite {
+		return nil, fsserver.ErrFileConflict
+	}
+
+	if err := os.MkdirAll(path.Dir(newBlobPath), os.ModePerm); err != nil {
+		return nil, err
+	}
+
+	if err := os.Rename(blobPath, newBlobPath); err != nil {
+		return nil, err
+	}
+
+	return stat, nil
+}
+
+func (storage *Storage) Delete(name string) (*fsserver.FileMetadata, error) {
+
+	storage.lock.Lock()
+	defer storage.lock.Unlock()
+
+	stat, err := storage.Stat(name)
+	if err != nil {
+		return nil, err
+	}
+
+	blobPath := BlobPath(storage.RootDir, name)
+	if err := os.Remove(blobPath); err != nil {
+		return nil, err
+	}
+
+	return stat, nil
+}
