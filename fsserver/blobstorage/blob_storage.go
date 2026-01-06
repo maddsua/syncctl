@@ -9,7 +9,6 @@ import (
 	"path"
 	"strings"
 	"sync"
-	"sync/atomic"
 
 	"github.com/maddsua/syncctl/fsserver"
 )
@@ -34,19 +33,10 @@ func TempBlobPath(root, name string) string {
 
 type Storage struct {
 	RootDir string
-	wg      sync.WaitGroup
 	lock    sync.Mutex
-	done    atomic.Bool
 }
 
 func (storage *Storage) Put(entry *fsserver.FileUpload, overwrite bool) (*fsserver.FileMetadata, error) {
-
-	if storage.done.Load() {
-		return nil, ErrClosed
-	}
-
-	storage.wg.Add(1)
-	defer storage.wg.Done()
 
 	if entry.Name = CleanRelativePath(entry.Name); entry.Name == "" {
 		return nil, fsserver.ErrInvalidFileName
@@ -78,14 +68,6 @@ func (storage *Storage) Put(entry *fsserver.FileUpload, overwrite bool) (*fsserv
 
 func (storage *Storage) Get(name string) (*fsserver.ReadableFile, error) {
 
-	if storage.done.Load() {
-		return nil, ErrClosed
-	}
-
-	//	automatic wg controls
-	storage.wg.Add(1)
-	defer storage.wg.Done()
-
 	blobPath := BlobPath(storage.RootDir, name)
 
 	stat, err := os.Stat(blobPath)
@@ -106,15 +88,15 @@ func (storage *Storage) Get(name string) (*fsserver.ReadableFile, error) {
 
 	//	todo: create a read-seeker that handles both file handle lifetime and content reading
 
-	//	manually add one more to make sure we will wait until all operations are complete
-	storage.wg.Add(1)
-
 	return &fsserver.ReadableFile{
 		FileMetadata: fsserver.FileMetadata{
 			Name:     CleanRelativePath(name),
 			Modified: info.Modified,
 			Size:     info.Size,
 			SHA256:   info.SHA256,
+		},
+		ReadSeekCloser: &BlobReader{
+			File: file,
 		},
 	}, nil
 }
