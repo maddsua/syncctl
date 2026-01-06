@@ -16,10 +16,10 @@ type FileUpload struct {
 }
 
 type FileMetadata struct {
-	Name     string
-	Size     int64
-	Modified time.Time
-	SHA256   string
+	Name     string    `json:"n"`
+	Size     int64     `json:"s"`
+	Modified time.Time `json:"m"`
+	SHA256   string    `json:"h"`
 }
 
 type StorageError struct {
