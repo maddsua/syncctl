@@ -1,6 +1,7 @@
 package fsserver
 
 import (
+	"fmt"
 	"io"
 	"time"
 )
@@ -37,4 +38,30 @@ type Storage interface {
 	Move(oldPath string, newPath string, overwrite bool) (*FileMetaEntry, error)
 	Delete(name string) error
 	Find(filter FileFilterFn) ([]FileMetaEntry, error)
+}
+
+type StorageError struct {
+	Message string
+	Cause   string
+}
+
+func (err *StorageError) Error() string {
+
+	if err.Cause != "" {
+		return fmt.Sprintf("%s: %s", err.Message, err.Cause)
+	}
+
+	return err.Message
+}
+
+var ErrNoFile = &StorageError{
+	Message: "file not found",
+}
+
+var ErrFileConflict = &StorageError{
+	Message: "file conflict",
+}
+
+var ErrInvalidFileName = &StorageError{
+	Message: "invalid file name",
 }
