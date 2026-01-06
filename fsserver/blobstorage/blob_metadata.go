@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"time"
 )
 
 type BlobMetadata struct {
@@ -19,11 +20,14 @@ func (meta *BlobMetadata) WriteTar(wrt *tar.Writer) error {
 	}
 
 	if err := wrt.WriteHeader(&tar.Header{
-		Format:   tar.FormatGNU,
-		Typeflag: tar.TypeReg,
-		Name:     blobKeyMetadata,
-		Size:     int64(len(data)),
-		Mode:     int64(fs.ModePerm),
+		Format:     tar.FormatGNU,
+		Typeflag:   tar.TypeReg,
+		Name:       blobKeyMetadata,
+		Size:       int64(len(data)),
+		Mode:       int64(fs.ModePerm),
+		ChangeTime: time.Now(),
+		AccessTime: time.Now(),
+		ModTime:    time.Now(),
 	}); err != nil {
 		return &BlobError{"write tar metadata entry header", err}
 	}
