@@ -86,8 +86,6 @@ func (storage *Storage) Get(name string) (*fsserver.ReadableFile, error) {
 		return nil, fmt.Errorf("read blob info: %v", err)
 	}
 
-	//	todo: create a read-seeker that handles both file handle lifetime and content reading
-
 	return &fsserver.ReadableFile{
 		FileMetadata: fsserver.FileMetadata{
 			Name:     CleanRelativePath(name),

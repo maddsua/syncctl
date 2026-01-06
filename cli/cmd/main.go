@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/maddsua/syncctl/fsserver/blobstorage"
@@ -48,12 +49,12 @@ func main() {
 
 	fmt.Println("FILE", file)
 
-	//defer file.Close()
-	/* text, err := io.ReadAll(file)
+	defer file.Close()
+	text, err := io.ReadAll(file)
 	if err != nil {
 		fmt.Println("ERR", err)
 		os.Exit(1)
 	}
 
-	fmt.Println("TEXT", string(text)) */
+	fmt.Println("TEXT", string(text))
 }

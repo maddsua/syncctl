@@ -100,7 +100,7 @@ func (reader *BlobReader) Seek(offset int64, whence int) (int64, error) {
 	case io.SeekStart:
 		return reader.seek(offset)
 	case io.SeekEnd:
-		return reader.seek(reader.entry.Size - offset)
+		return reader.seek(reader.entry.Size + offset)
 	default:
 		return -1, fmt.Errorf("invalid whence: %d", whence)
 	}
