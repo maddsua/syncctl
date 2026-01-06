@@ -29,7 +29,7 @@ type Storage struct {
 	done    atomic.Bool
 }
 
-func (storage *Storage) Put(entry *fsserver.FileUpload, overwrite bool) (*fsserver.FileMetaEntry, error) {
+func (storage *Storage) Put(entry *fsserver.FileUpload, overwrite bool) (*fsserver.FileMetadata, error) {
 
 	if storage.done.Load() {
 		return nil, ErrClosed
@@ -53,13 +53,15 @@ func (storage *Storage) Put(entry *fsserver.FileUpload, overwrite bool) (*fsserv
 	}
 
 	tempBlobPath := blobPath + FileExtPartial
-	if err := WriteUploadAsBlob(tempBlobPath, entry); err != nil {
+	if meta, err := WriteUploadAsBlob(tempBlobPath, entry); err != nil {
 		return nil, err
+	} else {
+		entry.FileMetadata.SHA256 = meta.SHA256
 	}
 
 	if err := os.Rename(tempBlobPath, blobPath); err != nil {
 		return nil, err
 	}
 
-	return &entry.FileMetaEntry, nil
+	return &entry.FileMetadata, nil
 }

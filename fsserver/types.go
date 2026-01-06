@@ -6,23 +6,24 @@ import (
 	"time"
 )
 
-type File struct {
-	FileMetaEntry
+type ReadableFile struct {
+	FileMetadata
 	io.ReadSeekCloser
 }
 
 type FileUpload struct {
-	FileMetaEntry
+	FileMetadata
 	io.Reader
 }
 
-type FileMetaEntry struct {
+type FileMetadata struct {
 	Name   string
 	Date   time.Time
 	Size   int64
 	SHA256 string
 }
 
+// todo: remove
 type Page[T any] struct {
 	Entries []T
 	Size    int

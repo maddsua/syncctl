@@ -28,11 +28,11 @@ func (meta *BlobMetadata) WriteTar(wrt *tar.Writer) error {
 		Size:     int64(len(data)),
 		Mode:     int64(fs.ModePerm),
 	}); err != nil {
-		return err
+		return fmt.Errorf("write header: %v", err)
 	}
 
 	if n, err := wrt.Write(data); err != nil {
-		return err
+		return fmt.Errorf("write content: %v", err)
 	} else if n != len(data) {
 		return fmt.Errorf("unexpected write size: %d", n)
 	}

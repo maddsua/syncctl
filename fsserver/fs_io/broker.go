@@ -61,7 +61,7 @@ type FsBroker struct {
 	done    atomic.Bool
 }
 
-func (broker *FsBroker) List(ctx context.Context, pathPrefix, fileExt string, after, before time.Time, offset, limit int) (*fsserver.Page[fsserver.FileMetaEntry], error) {
+func (broker *FsBroker) List(ctx context.Context, pathPrefix, fileExt string, after, before time.Time, offset, limit int) (*fsserver.Page[fsserver.FileMetadata], error) {
 
 	if broker.done.Load() {
 		return nil, ErrClosed
@@ -77,7 +77,7 @@ func (broker *FsBroker) List(ctx context.Context, pathPrefix, fileExt string, af
 		fileExt = "." + fileExt
 	}
 
-	page := fsserver.Page[fsserver.FileMetaEntry]{
+	page := fsserver.Page[fsserver.FileMetadata]{
 		Offset: max(0, offset),
 	}
 
@@ -122,7 +122,7 @@ func (broker *FsBroker) List(ctx context.Context, pathPrefix, fileExt string, af
 			return fmt.Errorf("hash file '%s': %v", scopedPath, err)
 		}
 
-		page.Entries = append(page.Entries, fsserver.FileMetaEntry{
+		page.Entries = append(page.Entries, fsserver.FileMetadata{
 			Name:   scopedPath,
 			Date:   mtime,
 			Size:   stat.Size(),
@@ -141,7 +141,7 @@ func (broker *FsBroker) List(ctx context.Context, pathPrefix, fileExt string, af
 	return &page, nil
 }
 
-func (broker *FsBroker) Put(ctx context.Context, entry *fsserver.FileUpload, overwrite bool) (*fsserver.FileMetaEntry, error) {
+func (broker *FsBroker) Put(ctx context.Context, entry *fsserver.FileUpload, overwrite bool) (*fsserver.FileMetadata, error) {
 
 	if entry.Name == "" {
 		return nil, fmt.Errorf("empty file name")
@@ -211,7 +211,7 @@ func (broker *FsBroker) Put(ctx context.Context, entry *fsserver.FileUpload, ove
 
 	_ = RemoveReservedExtensions(distPath)
 
-	return &fsserver.FileMetaEntry{
+	return &fsserver.FileMetadata{
 		Name:   cleanNestedPath(entry.Name),
 		Date:   entry.Date,
 		Size:   entry.Size,
@@ -219,7 +219,7 @@ func (broker *FsBroker) Put(ctx context.Context, entry *fsserver.FileUpload, ove
 	}, nil
 }
 
-func (broker *FsBroker) Get(ctx context.Context, name string) (*fsserver.File, error) {
+func (broker *FsBroker) Get(ctx context.Context, name string) (*fsserver.ReadableFile, error) {
 
 	if broker.done.Load() {
 		return nil, ErrClosed
@@ -249,8 +249,8 @@ func (broker *FsBroker) Get(ctx context.Context, name string) (*fsserver.File, e
 	//	manually add one more to make sure we will wait until all operations are complete
 	broker.wg.Add(1)
 
-	return &fsserver.File{
-		FileMetaEntry: fsserver.FileMetaEntry{
+	return &fsserver.ReadableFile{
+		FileMetadata: fsserver.FileMetadata{
 			Name:   cleanNestedPath(name),
 			Date:   stat.ModTime(),
 			Size:   stat.Size(),
@@ -263,7 +263,7 @@ func (broker *FsBroker) Get(ctx context.Context, name string) (*fsserver.File, e
 	}, nil
 }
 
-func (broker *FsBroker) Move(ctx context.Context, oldPath, newPath string, overwrite bool) (*fsserver.FileMetaEntry, error) {
+func (broker *FsBroker) Move(ctx context.Context, oldPath, newPath string, overwrite bool) (*fsserver.FileMetadata, error) {
 
 	if broker.done.Load() {
 		return nil, ErrClosed
@@ -282,7 +282,7 @@ func (broker *FsBroker) Move(ctx context.Context, oldPath, newPath string, overw
 		return nil, ErrNoFile
 	}
 
-	entry := fsserver.FileMetaEntry{
+	entry := fsserver.FileMetadata{
 		Name: cleanNestedPath(newPath),
 		Date: stat.ModTime(),
 		Size: stat.Size(),

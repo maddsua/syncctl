@@ -12,11 +12,11 @@ import (
 	"github.com/maddsua/syncctl/fsserver"
 )
 
-func WriteUploadAsBlob(name string, entry *fsserver.FileUpload) error {
+func WriteUploadAsBlob(name string, entry *fsserver.FileUpload) (*BlobMetadata, error) {
 
 	file, err := os.Create(name)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer file.Close()
 
@@ -32,28 +32,30 @@ func WriteUploadAsBlob(name string, entry *fsserver.FileUpload) error {
 		AccessTime: entry.Date,
 		ChangeTime: entry.Date,
 	}); err != nil {
-		return err
+		return nil, fmt.Errorf("write data block header: %v", err)
 	}
 
 	hasher := sha256.New()
 
-	if n, err := io.Copy(file, io.TeeReader(entry.Reader, hasher)); err != nil {
-		return err
+	if n, err := io.Copy(arc, io.TeeReader(entry.Reader, hasher)); err != nil {
+		return nil, fmt.Errorf("write data block content: %v", err)
 	} else if n != entry.Size {
-		return fmt.Errorf("unexpected blob size: %d bytes written instead of %d", n, entry.Size)
+		return nil, fmt.Errorf("unexpected blob size: %d bytes written instead of %d", n, entry.Size)
 	}
 
 	meta := BlobMetadata{
 		SHA256: hex.EncodeToString(hasher.Sum(nil)),
 	}
 
-	if meta.SHA256 != entry.SHA256 {
-		return fmt.Errorf("unexpected sha256 checksum: %s instead of %s", meta.SHA256, entry.SHA256)
+	if entry.SHA256 != "" {
+		if meta.SHA256 != entry.SHA256 {
+			return nil, fmt.Errorf("unexpected sha256 checksum: '%s' instead of '%s'", meta.SHA256, entry.SHA256)
+		}
 	}
 
 	if err := meta.WriteTar(arc); err != nil {
-		return err
+		return nil, fmt.Errorf("write metadata: %v", err)
 	}
 
-	return arc.Close()
+	return &meta, arc.Close()
 }
