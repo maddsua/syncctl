@@ -13,7 +13,7 @@ import (
 	"github.com/maddsua/syncctl/fsserver"
 )
 
-const blobKeyMetadata = "metadat"
+const blobKeyMetadata = "metadata"
 const blobKeyData = "data"
 
 type BlobInfo struct {
