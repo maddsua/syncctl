@@ -39,7 +39,7 @@ func (reader *BlobReader) seekBlobStart() error {
 		}
 	}
 
-	return fmt.Errorf("unable to find blob data entry")
+	return &BlobError{"blob init", errors.New("missing data entry")}
 }
 
 func (reader *BlobReader) initBlob() error {
@@ -54,7 +54,7 @@ func (reader *BlobReader) initBlob() error {
 func (reader *BlobReader) seek(newOffset int64) (int64, error) {
 
 	if newOffset < 0 || newOffset >= reader.entry.Size {
-		return -1, errors.New("invalid seek offset")
+		return -1, &BlobError{"seek", errors.New("invalid offset")}
 	} else if newOffset == reader.offset {
 		return reader.offset, nil
 	}
@@ -102,7 +102,7 @@ func (reader *BlobReader) Seek(offset int64, whence int) (int64, error) {
 	case io.SeekEnd:
 		return reader.seek(reader.entry.Size + offset)
 	default:
-		return -1, fmt.Errorf("invalid whence: %d", whence)
+		return -1, &BlobError{"seek", fmt.Errorf("invalid whence: %d", whence)}
 	}
 }
 

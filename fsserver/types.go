@@ -1,7 +1,6 @@
 package fsserver
 
 import (
-	"fmt"
 	"io"
 	"time"
 )
@@ -23,26 +22,11 @@ type FileMetadata struct {
 	SHA256   string
 }
 
-// todo: remove
-type Page[T any] struct {
-	Entries []T
-	Size    int
-	Offset  int
-	Total   int
-}
-
-// todo: replace
 type StorageError struct {
 	Message string
-	Cause   string
 }
 
 func (err *StorageError) Error() string {
-
-	if err.Cause != "" {
-		return fmt.Sprintf("%s: %s", err.Message, err.Cause)
-	}
-
 	return err.Message
 }
 

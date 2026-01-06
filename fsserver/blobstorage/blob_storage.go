@@ -2,7 +2,6 @@ package blobstorage
 
 import (
 	"archive/tar"
-	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -12,8 +11,6 @@ import (
 
 	"github.com/maddsua/syncctl/fsserver"
 )
-
-var ErrClosed = errors.New("storage closed")
 
 const FileExtBlob = ".blob"
 const FileExtPartial = ".part"
@@ -171,3 +168,5 @@ func (storage *Storage) Delete(name string) (*fsserver.FileMetadata, error) {
 
 	return stat, nil
 }
+
+//	todo: add listings

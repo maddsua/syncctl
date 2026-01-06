@@ -26,7 +26,7 @@ func WriteUploadAsBlob(name string, entry *fsserver.FileUpload) (*BlobInfo, erro
 
 	file, err := os.Create(name)
 	if err != nil {
-		return nil, err
+		return nil, &BlobError{"create file", err}
 	}
 	defer file.Close()
 
@@ -42,15 +42,15 @@ func WriteUploadAsBlob(name string, entry *fsserver.FileUpload) (*BlobInfo, erro
 		AccessTime: entry.Modified,
 		ChangeTime: entry.Modified,
 	}); err != nil {
-		return nil, fmt.Errorf("write data block header: %v", err)
+		return nil, &BlobError{"write tar data entry header", err}
 	}
 
 	hasher := sha256.New()
 
 	if n, err := io.Copy(arc, io.TeeReader(entry.Reader, hasher)); err != nil {
-		return nil, fmt.Errorf("write data block content: %v", err)
+		return nil, &BlobError{"write tar data entry", err}
 	} else if n != entry.Size {
-		return nil, fmt.Errorf("unexpected blob size: %d bytes written instead of %d", n, entry.Size)
+		return nil, &BlobError{"write tar data entry", fmt.Errorf("expected size: %d bytes but wrote %d instead", n, entry.Size)}
 	}
 
 	meta := BlobMetadata{
@@ -59,12 +59,12 @@ func WriteUploadAsBlob(name string, entry *fsserver.FileUpload) (*BlobInfo, erro
 
 	if entry.SHA256 != "" {
 		if meta.SHA256 != entry.SHA256 {
-			return nil, fmt.Errorf("unexpected sha256 checksum: '%s' instead of '%s'", meta.SHA256, entry.SHA256)
+			return nil, &BlobError{"data entry sha256 checksum", fmt.Errorf("expected: '%s'; have '%s'", meta.SHA256, entry.SHA256)}
 		}
 	}
 
 	if err := meta.WriteTar(arc); err != nil {
-		return nil, fmt.Errorf("write metadata: %v", err)
+		return nil, err
 	}
 
 	return &BlobInfo{
@@ -86,7 +86,7 @@ func ReadBlobInfo(reader *tar.Reader) (*BlobInfo, error) {
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			return nil, err
+			return nil, &BlobError{"read next tar entry", err}
 		}
 
 		switch entry.Name {
@@ -98,16 +98,16 @@ func ReadBlobInfo(reader *tar.Reader) (*BlobInfo, error) {
 			readSet[blobKeyData] = struct{}{}
 		case blobKeyMetadata:
 			if err := info.BlobMetadata.ReadTar(reader); err != nil {
-				return nil, err
+				return nil, &BlobError{"read tar metadata entry", err}
 			}
 			readSet[blobKeyMetadata] = struct{}{}
 		}
 	}
 
 	if _, has := readSet[blobKeyData]; !has {
-		return nil, fmt.Errorf("blob data entry is missing")
+		return nil, &BlobError{"format check", fmt.Errorf("missing data entry")}
 	} else if _, has := readSet[blobKeyMetadata]; !has {
-		return nil, fmt.Errorf("blob metdata entry is missing")
+		return nil, &BlobError{"format check", fmt.Errorf("missing metadata entry found")}
 	}
 
 	return &info, nil
