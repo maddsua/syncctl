@@ -8,8 +8,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/maddsua/syncctl/fsserver/blobstorage"
-	"github.com/maddsua/syncctl/fsserver/handler"
+	"github.com/maddsua/syncctl/storage_service/blobstorage"
+	"github.com/maddsua/syncctl/storage_service/handler"
 )
 
 func main() {
@@ -27,7 +27,7 @@ func main() {
 
 	var mux http.ServeMux
 
-	//	s4 stands for Stipidly-Simple-Storage-Service
+	//	s4 stands for Stipidly-Simple-Storage-Service, btw
 	mux.Handle("/s4/v1/", http.StripPrefix("/s4/v1", fshandler))
 
 	srv := http.Server{

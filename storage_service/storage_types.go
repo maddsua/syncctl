@@ -1,4 +1,4 @@
-package fsserver
+package storage_service
 
 import (
 	"io"

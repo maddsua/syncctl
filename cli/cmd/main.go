@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/maddsua/syncctl/fsserver/blobstorage"
+	"github.com/maddsua/syncctl/storage_service/blobstorage"
 )
 
 func main() {

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/maddsua/syncctl/fsserver"
+	s4 "github.com/maddsua/syncctl/storage_service"
 )
 
 func CleanRelativePath(val string) string {
@@ -59,15 +59,15 @@ type Storage struct {
 	lock    sync.Mutex
 }
 
-func (storage *Storage) Put(entry *fsserver.FileUpload, overwrite bool) (*fsserver.FileMetadata, error) {
+func (storage *Storage) Put(entry *s4.FileUpload, overwrite bool) (*s4.FileMetadata, error) {
 
 	if entry.Name = CleanRelativePath(entry.Name); entry.Name == "" {
-		return nil, &fsserver.NameError{Name: entry.Name}
+		return nil, &s4.NameError{Name: entry.Name}
 	}
 
 	blobPath := BlobPath(storage.RootDir, entry.Name)
 	if _, err := os.Stat(blobPath); err == nil && !overwrite {
-		return nil, &fsserver.FileConflictError{Path: entry.Name}
+		return nil, &s4.FileConflictError{Path: entry.Name}
 	}
 
 	if err := os.MkdirAll(path.Dir(blobPath), fs.ModePerm); err != nil {
@@ -89,13 +89,13 @@ func (storage *Storage) Put(entry *fsserver.FileUpload, overwrite bool) (*fsserv
 	return &entry.FileMetadata, nil
 }
 
-func (storage *Storage) Get(name string) (*fsserver.ReadableFile, error) {
+func (storage *Storage) Get(name string) (*s4.ReadableFile, error) {
 
 	blobPath := BlobPath(storage.RootDir, name)
 
 	stat, err := os.Stat(blobPath)
 	if err != nil || !stat.Mode().IsRegular() {
-		return nil, &fsserver.FileNotFoundError{Path: name}
+		return nil, &s4.FileNotFoundError{Path: name}
 	}
 
 	file, err := os.Open(blobPath)
@@ -109,8 +109,8 @@ func (storage *Storage) Get(name string) (*fsserver.ReadableFile, error) {
 		return nil, fmt.Errorf("read blob info: %v", err)
 	}
 
-	return &fsserver.ReadableFile{
-		FileMetadata: fsserver.FileMetadata{
+	return &s4.ReadableFile{
+		FileMetadata: s4.FileMetadata{
 			Name:     CleanRelativePath(name),
 			Modified: info.Modified,
 			Size:     info.Size,
@@ -122,12 +122,12 @@ func (storage *Storage) Get(name string) (*fsserver.ReadableFile, error) {
 	}, nil
 }
 
-func (storage *Storage) Stat(name string) (*fsserver.FileMetadata, error) {
+func (storage *Storage) Stat(name string) (*s4.FileMetadata, error) {
 
 	blobPath := BlobPath(storage.RootDir, name)
 
 	if _, err := os.Stat(blobPath); err != nil {
-		return nil, &fsserver.FileNotFoundError{Path: name}
+		return nil, &s4.FileNotFoundError{Path: name}
 	}
 
 	file, err := os.Open(blobPath)
@@ -142,7 +142,7 @@ func (storage *Storage) Stat(name string) (*fsserver.FileMetadata, error) {
 		return nil, fmt.Errorf("read blob info: %v", err)
 	}
 
-	return &fsserver.FileMetadata{
+	return &s4.FileMetadata{
 		Name:     CleanRelativePath(name),
 		Size:     info.Size,
 		Modified: info.Modified,
@@ -150,15 +150,15 @@ func (storage *Storage) Stat(name string) (*fsserver.FileMetadata, error) {
 	}, nil
 }
 
-func (storage *Storage) Move(name, newName string, overwrite bool) (*fsserver.FileMetadata, error) {
+func (storage *Storage) Move(name, newName string, overwrite bool) (*s4.FileMetadata, error) {
 
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
 
 	if name == "" {
-		return nil, &fsserver.NameError{Name: name}
+		return nil, &s4.NameError{Name: name}
 	} else if newName == "" {
-		return nil, &fsserver.NameError{Name: newName}
+		return nil, &s4.NameError{Name: newName}
 	}
 
 	stat, err := storage.Stat(name)
@@ -169,7 +169,7 @@ func (storage *Storage) Move(name, newName string, overwrite bool) (*fsserver.Fi
 	blobPath := BlobPath(storage.RootDir, name)
 	newBlobPath := BlobPath(storage.RootDir, newName)
 	if _, err := os.Stat(newBlobPath); err == nil && !overwrite {
-		return nil, &fsserver.FileConflictError{Path: name}
+		return nil, &s4.FileConflictError{Path: name}
 	}
 
 	if err := os.MkdirAll(path.Dir(newBlobPath), os.ModePerm); err != nil {
@@ -185,7 +185,7 @@ func (storage *Storage) Move(name, newName string, overwrite bool) (*fsserver.Fi
 	return stat, nil
 }
 
-func (storage *Storage) Delete(name string) (*fsserver.FileMetadata, error) {
+func (storage *Storage) Delete(name string) (*s4.FileMetadata, error) {
 
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
@@ -203,7 +203,7 @@ func (storage *Storage) Delete(name string) (*fsserver.FileMetadata, error) {
 	return stat, nil
 }
 
-func (storage *Storage) List(prefix string, recursive bool, offset, limit int) ([]fsserver.FileMetadata, error) {
+func (storage *Storage) List(prefix string, recursive bool, offset, limit int) ([]s4.FileMetadata, error) {
 
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
@@ -215,7 +215,7 @@ func (storage *Storage) List(prefix string, recursive bool, offset, limit int) (
 		return nil, nil
 	}
 
-	results := make([]fsserver.FileMetadata, 0)
+	results := make([]s4.FileMetadata, 0)
 	var pageIdx int
 
 	var onFile = func(name string) (bool, error) {
@@ -239,7 +239,7 @@ func (storage *Storage) List(prefix string, recursive bool, offset, limit int) (
 			return false, err
 		}
 
-		results = append(results, fsserver.FileMetadata{
+		results = append(results, s4.FileMetadata{
 			Name:     StripBlobPath(name, storage.RootDir),
 			Size:     info.Size,
 			Modified: info.Modified,

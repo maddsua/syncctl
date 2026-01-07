@@ -10,7 +10,7 @@ import (
 	"path"
 	"time"
 
-	"github.com/maddsua/syncctl/fsserver"
+	s4 "github.com/maddsua/syncctl/storage_service"
 )
 
 const FileExtBlob = ".blob"
@@ -30,7 +30,7 @@ type TempBlobInfo struct {
 	BlobInfo
 }
 
-func WriteUploadAsBlob(name string, entry *fsserver.FileUpload) (*TempBlobInfo, error) {
+func WriteUploadAsBlob(name string, entry *s4.FileUpload) (*TempBlobInfo, error) {
 
 	file, err := os.CreateTemp(path.Split(name))
 	if err != nil {

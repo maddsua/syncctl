@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/maddsua/syncctl/fsserver"
+	s4 "github.com/maddsua/syncctl/storage_service"
 )
 
 type HandleWaiter interface {
@@ -18,7 +18,7 @@ type HandleWaiter interface {
 	Wait()
 }
 
-func NewFsHandler(storage fsserver.Storage) HandleWaiter {
+func NewFsHandler(storage s4.Storage) HandleWaiter {
 
 	//	todo: handle auth
 
@@ -40,8 +40,8 @@ func NewFsHandler(storage fsserver.Storage) HandleWaiter {
 			modified = time.Now()
 		}
 
-		newResponse(storage.Put(&fsserver.FileUpload{
-			FileMetadata: fsserver.FileMetadata{
+		newResponse(storage.Put(&s4.FileUpload{
+			FileMetadata: s4.FileMetadata{
 				Name:     req.URL.Query().Get("name"),
 				Size:     size,
 				Modified: modified,
@@ -124,16 +124,16 @@ type fsHandler struct {
 	*sync.WaitGroup
 }
 
-func newResponse[T any](val T, err error) *fsserver.APIResponse[T] {
+func newResponse[T any](val T, err error) *s4.APIResponse[T] {
 
 	var getErrorCode = func(err error) int {
 
 		switch err.(type) {
-		case *fsserver.FileNotFoundError:
+		case *s4.FileNotFoundError:
 			return http.StatusNotFound
-		case *fsserver.FileConflictError:
+		case *s4.FileConflictError:
 			return http.StatusConflict
-		case *fsserver.NameError:
+		case *s4.NameError:
 			return http.StatusBadRequest
 		default:
 			return http.StatusInternalServerError
@@ -141,12 +141,12 @@ func newResponse[T any](val T, err error) *fsserver.APIResponse[T] {
 	}
 
 	if err != nil {
-		return &fsserver.APIResponse[T]{
-			Error: &fsserver.APIError{
+		return &s4.APIResponse[T]{
+			Error: &s4.APIError{
 				Message:  err.Error(),
 				WithCode: getErrorCode(err),
 			},
 		}
 	}
-	return &fsserver.APIResponse[T]{Data: val}
+	return &s4.APIResponse[T]{Data: val}
 }
