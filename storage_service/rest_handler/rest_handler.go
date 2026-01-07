@@ -65,8 +65,8 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 
 		defer file.ReadSeekCloser.Close()
 
-		dataRange := ByteRange{TotalSize: file.Size}
-		if err := dataRange.Parse(req.Header.Get("Range")); err != nil {
+		dataRange := ByteRange{}
+		if err := dataRange.ParseWith(req.Header.Get("Range"), file.Size); err != nil {
 			NewErrorResponseWithCode(err.Error(), http.StatusRequestedRangeNotSatisfiable).WriteJSON(wrt)
 			return
 		}
@@ -77,7 +77,7 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 		wrt.Header().Set("Etag", "sha256="+file.FileMetadata.SHA256)
 		wrt.Header().Set("Accept-Ranges", "bytes")
 
-		if !dataRange.IsZero() {
+		if dataRange.Valid {
 			wrt.Header().Set("Content-Length", strconv.FormatInt(dataRange.Size(), 10))
 			wrt.Header().Set("Content-Range", dataRange.String())
 			wrt.WriteHeader(http.StatusPartialContent)
@@ -86,14 +86,14 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 			wrt.WriteHeader(http.StatusOK)
 		}
 
-		if dataRange.Start > 0 {
+		if dataRange.Valid && dataRange.Start > 0 {
 			if _, err := file.ReadSeekCloser.Seek(dataRange.Start, io.SeekStart); err != nil {
 				NewErrorResponseWithCode(err.Error(), http.StatusInternalServerError).WriteJSON(wrt)
 			}
 		}
 
 		var bodyReader io.Reader = file.ReadSeekCloser
-		if dataRange.End > 0 {
+		if dataRange.Valid && dataRange.End > 0 {
 			bodyReader = io.LimitReader(file.ReadSeekCloser, dataRange.Size())
 		}
 
