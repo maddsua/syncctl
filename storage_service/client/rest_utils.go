@@ -33,7 +33,7 @@ func prepareRequest(baseUrl string, auth *url.Userinfo, operationMethod, operati
 		return nil, err
 	}
 
-	requestURL.Path = path.Join(requestURL.Path, operationPath)
+	requestURL.Path = path.Join(requestURL.Path, s4.PrefixV1, operationPath)
 
 	if operationParams != nil {
 		requestURL.RawQuery = operationParams.Encode()
@@ -104,5 +104,9 @@ func parseJSONResponse[R any](response *http.Response) (R, error) {
 		}
 	}
 
-	return result.Data, result.Error
+	if result.Error != nil {
+		return result.Data, result.Error
+	}
+
+	return result.Data, nil
 }

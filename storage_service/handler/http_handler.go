@@ -75,7 +75,6 @@ func NewFsHandler(storage s4.Storage) HandleWaiter {
 		wrt.Header().Set("Content-Length", fmt.Sprint(entry.FileMetadata.Size))
 		wrt.Header().Set("Date", entry.FileMetadata.Modified.Format(time.RFC1123))
 		wrt.Header().Set("Content-Disposition", "attachment; filename="+url.QueryEscape(entry.Name))
-
 		wrt.Header().Set("Etag", "sha256="+entry.FileMetadata.SHA256)
 
 		wrt.WriteHeader(http.StatusOK)

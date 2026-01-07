@@ -41,12 +41,12 @@ func (client *Client) Put(ctx context.Context, entry *s4.FileUpload, overwrite b
 	return executeJSONRequest[*s4.FileMetadata](req)
 }
 
-func (client *Client) Get(ctx context.Context, name string) (*s4.ReadableFile, error) {
+func (client *Client) Download(ctx context.Context, name string) (*s4.ReadableFile, error) {
 
 	params := url.Values{}
 	params.Set("name", name)
 
-	req, err := prepareRequest(client.URL, &client.Auth, http.MethodPut, "/download", params, nil)
+	req, err := prepareRequest(client.URL, &client.Auth, http.MethodGet, "/download", params, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +88,7 @@ func (client *Client) Get(ctx context.Context, name string) (*s4.ReadableFile, e
 		}
 	}
 
-	if val, ok := strings.CutPrefix(req.Header.Get("Etag"), "sha256="); ok {
+	if val, ok := strings.CutPrefix(response.Header.Get("Etag"), "sha256="); ok {
 		meta.SHA256 = val
 	}
 
@@ -121,7 +121,7 @@ func (client *Client) Move(ctx context.Context, name string, newName string, ove
 		params.Set("overwrite", "true")
 	}
 
-	req, err := prepareRequest(client.URL, &client.Auth, http.MethodDelete, "/move", params, nil)
+	req, err := prepareRequest(client.URL, &client.Auth, http.MethodPost, "/move", params, nil)
 	if err != nil {
 		return nil, err
 	}

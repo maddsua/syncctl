@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
+	s4 "github.com/maddsua/syncctl/storage_service"
 	"github.com/maddsua/syncctl/storage_service/blobstorage"
 	"github.com/maddsua/syncctl/storage_service/handler"
 )
@@ -28,7 +30,7 @@ func main() {
 	var mux http.ServeMux
 
 	//	s4 stands for Stipidly-Simple-Storage-Service, btw
-	mux.Handle("/s4/v1/", http.StripPrefix("/s4/v1", fshandler))
+	mux.Handle(s4.PrefixV1, http.StripPrefix(strings.TrimRight(s4.PrefixV1, "/"), fshandler))
 
 	srv := http.Server{
 		Handler: &mux,
