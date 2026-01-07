@@ -2,7 +2,10 @@ package cli
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"strings"
@@ -132,11 +135,34 @@ func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, o
 		return nil
 	}
 
-	//	todo: add progress
-
-	if err := WriteLocalFile(localPath, blob.ReadCloser, blob.Modified); err != nil {
+	localDirName, tempBaseName := path.Split(localPath)
+	if err := os.MkdirAll(localDirName, os.ModePerm); err != nil {
 		return err
 	}
+
+	hasher := sha256.New()
+
+	//	todo: add progress
+
+	tmpFile, err := WriteTempFile(localDirName, tempBaseName, io.TeeReader(blob.ReadCloser, hasher))
+	if err != nil {
+		return err
+	}
+	defer tmpFile.Cleanup()
+
+	if hash := hex.EncodeToString(hasher.Sum(nil)); hash != entry.SHA256 {
+		return fmt.Errorf("Hash mismatch: '%s' instead of '%s'", hash, entry.SHA256)
+	}
+
+	if err := os.Chtimes(tmpFile.Name, blob.Modified, blob.Modified); err != nil {
+		return err
+	}
+
+	if err := os.Rename(tmpFile.Name, localPath); err != nil {
+		return err
+	}
+
+	_ = tmpFile.Release()
 
 	return nil
 }

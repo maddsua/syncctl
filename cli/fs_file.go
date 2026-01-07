@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"io"
 	"os"
-	"path"
 	"time"
 
 	"github.com/maddsua/syncctl/utils"
@@ -49,32 +48,6 @@ func FileSha256HashString(name string) (string, error) {
 	}
 
 	return hex.EncodeToString(hasher.Sum(nil)), nil
-}
-
-func WriteLocalFile(name string, reader io.Reader, mtime time.Time) error {
-
-	dirname, basename := path.Split(name)
-	if err := os.MkdirAll(dirname, os.ModePerm); err != nil {
-		return err
-	}
-
-	tmpFile, err := WriteTempFile(dirname, basename, reader)
-	if err != nil {
-		return err
-	}
-	defer tmpFile.Cleanup()
-
-	if err := os.Chtimes(tmpFile.Name, mtime, mtime); err != nil {
-		return err
-	}
-
-	if err := os.Rename(tmpFile.Name, name); err != nil {
-		return err
-	}
-
-	_ = tmpFile.Release()
-
-	return nil
 }
 
 func WriteTempFile(dirname, basename string, reader io.Reader) (*utils.FileJanitor, error) {
