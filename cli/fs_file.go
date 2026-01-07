@@ -11,61 +11,54 @@ import (
 	"github.com/maddsua/syncctl/utils"
 )
 
-type LocalFileInfo struct {
+type FileContentStats struct {
 	Modified time.Time
 	SHA256   string
 }
 
-func FileExists(name string) (*LocalFileInfo, error) {
+func FileContentStat(name string) (*FileContentStats, error) {
 
 	stat, _ := os.Stat(name)
 	if stat == nil {
 		return nil, nil
 	}
 
+	hash, err := FileSha256HashString(name)
+	if err != nil {
+		return nil, err
+	}
+
+	return &FileContentStats{
+		Modified: stat.ModTime(),
+		SHA256:   hash,
+	}, nil
+}
+
+func FileSha256HashString(name string) (string, error) {
+
 	hasher := sha256.New()
 
 	file, err := os.Open(name)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	defer file.Close()
 
 	if _, err := io.Copy(hasher, file); err != nil {
-		return nil, err
+		return "", err
 	}
 
-	return &LocalFileInfo{
-		Modified: stat.ModTime(),
-		SHA256:   hex.EncodeToString(hasher.Sum(nil)),
-	}, nil
+	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
 func WriteLocalFile(name string, reader io.Reader, mtime time.Time) error {
 
-	var writeTmp = func() (*utils.FileJanitor, error) {
-
-		dirname, basename := path.Split(name)
-
-		file, err := os.CreateTemp(dirname, basename+"*.tmp")
-		if err != nil {
-			return nil, err
-		}
-
-		if _, err := io.Copy(file, reader); err != nil {
-			_ = file.Close()
-			_ = os.Remove(file.Name())
-			return nil, err
-		}
-
-		if err := file.Close(); err != nil {
-			return nil, err
-		}
-
-		return &utils.FileJanitor{Name: file.Name()}, nil
+	dirname, basename := path.Split(name)
+	if err := os.MkdirAll(dirname, os.ModePerm); err != nil {
+		return err
 	}
 
-	tmpFile, err := writeTmp()
+	tmpFile, err := WriteTempFile(dirname, basename, reader)
 	if err != nil {
 		return err
 	}
@@ -82,4 +75,25 @@ func WriteLocalFile(name string, reader io.Reader, mtime time.Time) error {
 	_ = tmpFile.Release()
 
 	return nil
+}
+
+func WriteTempFile(dirname, basename string, reader io.Reader) (*utils.FileJanitor, error) {
+
+	file, err := os.CreateTemp(dirname, basename+"*.tmp")
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := io.Copy(file, reader); err != nil {
+		_ = file.Close()
+		_ = os.Remove(file.Name())
+		return nil, err
+	}
+
+	//	not deferring because we kinda want to check if it's succeeded
+	if err := file.Close(); err != nil {
+		return nil, err
+	}
+
+	return &utils.FileJanitor{Name: file.Name()}, nil
 }

@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"slices"
+	"strconv"
+	"strings"
 )
 
 func ListAllRegular(name string) ([]string, error) {
@@ -46,4 +49,53 @@ func ListAllRegular(name string) ([]string, error) {
 	}
 
 	return result, nil
+}
+
+func WithFileIdx(name string, idx int) string {
+
+	ext := path.Ext(name)
+	name = strings.TrimSuffix(name, ext)
+
+	return name + "-" + strconv.Itoa(idx) + ext
+}
+
+func HighestFileIndex(name string) (int, error) {
+
+	entries, err := os.ReadDir(path.Dir(name))
+	if err != nil {
+		return 0, err
+	} else if len(entries) < 2 {
+		return 0, nil
+	}
+
+	ext := path.Ext(name)
+	baseName := strings.TrimSuffix(path.Base(name), ext)
+
+	var indexes []int
+
+	for _, entry := range entries {
+
+		name := entry.Name()
+
+		if !strings.HasPrefix(name, baseName) || !strings.HasSuffix(name, ext) {
+			continue
+		}
+
+		diff := name[len(baseName):]
+		diff = diff[:len(diff)-len(ext)]
+		if len(diff) < 2 || diff[0] != '-' {
+			continue
+		}
+
+		idx, _ := strconv.Atoi(diff[1:])
+		indexes = append(indexes, idx)
+	}
+
+	if len(indexes) < 2 {
+		return 0, nil
+	}
+
+	slices.Sort(indexes)
+
+	return indexes[len(indexes)-1], nil
 }

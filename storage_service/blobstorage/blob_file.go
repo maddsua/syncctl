@@ -38,10 +38,11 @@ func WriteUploadAsBlob(name string, entry *s4.FileUpload) (*TempBlobInfo, error)
 	if err != nil {
 		return nil, &BlobError{"create partial file", err}
 	}
-	defer file.Close()
 
 	janitor := utils.FileJanitor{Name: file.Name()}
+
 	defer janitor.Cleanup()
+	defer file.Close()
 
 	arc := tar.NewWriter(file)
 
@@ -81,6 +82,11 @@ func WriteUploadAsBlob(name string, entry *s4.FileUpload) (*TempBlobInfo, error)
 	}
 
 	if err := arc.Close(); err != nil {
+		return nil, err
+	}
+
+	//	calling it one more time just to make sure we don't get any wonky writes
+	if err := file.Close(); err != nil {
 		return nil, err
 	}
 

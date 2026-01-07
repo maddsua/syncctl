@@ -15,7 +15,7 @@ func main() {
 		RemoteURL: "http://localhost:2000/",
 	}
 
-	if err := cli.Pull(context.Background(), &client, "/pics", "data/client/pics", cli.ResolveOverwrite, true); err != nil {
+	if err := cli.Pull(context.Background(), &client, "/docs", "data/client/docs", cli.ResolveOverwrite, true); err != nil {
 		fmt.Println("ERR", err)
 		os.Exit(1)
 	}

@@ -12,6 +12,10 @@ import (
 
 func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir string, onconflict FileConflicResolution, prune bool) error {
 
+	if onconflict == ResolveAsVersions && prune {
+		return fmt.Errorf("can't use both file versioning and prunning at the same time! wtf?!")
+	}
+
 	var pruneMap map[string]struct{}
 
 	if prune {
@@ -66,19 +70,21 @@ func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir stri
 
 func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, onconflict FileConflicResolution, entry *s4.FileMetadata) error {
 
-	if info, err := FileExists(localPath); err != nil {
+	if stat, err := FileContentStat(localPath); err != nil {
 		return err
-	} else if info != nil {
+	} else if stat == nil {
+		fmt.Println("Copying", localPath)
+	} else {
 
 		switch onconflict {
 
 		case ResolveOverwrite:
 
-			if info.SHA256 == entry.SHA256 {
+			if stat.SHA256 == entry.SHA256 {
 
 				fmt.Println("No changes for", localPath)
 
-				if !info.Modified.Equal(entry.Modified) {
+				if !stat.Modified.Equal(entry.Modified) {
 					fmt.Println("Update mtime for", localPath)
 					if err := os.Chtimes(localPath, entry.Modified, entry.Modified); err != nil {
 						return err
@@ -90,17 +96,33 @@ func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, o
 
 			fmt.Println("Updating", localPath)
 
-		case ResolveStoreBoth:
-			//	todo: update name
-			return fmt.Errorf("renaming is not implemented yet")
+		case ResolveAsVersions:
+
+			if stat.SHA256 == entry.SHA256 {
+				fmt.Println("No changes for", localPath)
+				return nil
+			}
+
+			idx, err := HighestFileIndex(localPath)
+			if err != nil {
+				return err
+			}
+
+			if hash, err := FileSha256HashString(WithFileIdx(localPath, idx)); err != nil {
+				localPath = WithFileIdx(localPath, idx)
+				fmt.Println("Updating", localPath, "version", idx)
+			} else if hash != entry.SHA256 {
+				fmt.Println("Adding version", localPath, idx+1)
+				localPath = WithFileIdx(localPath, idx+1)
+			} else {
+				fmt.Println("No new versions", localPath)
+				return nil
+			}
 
 		default:
 			fmt.Println("Skipping existing", localPath)
 			return nil
 		}
-
-	} else {
-		fmt.Println("Copying", localPath)
 	}
 
 	blob, err := client.Download(ctx, entry.Name)
