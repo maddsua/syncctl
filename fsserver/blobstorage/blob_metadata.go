@@ -24,7 +24,7 @@ func (meta *BlobMetadata) WriteTar(wrt *tar.Writer) error {
 		Typeflag:   tar.TypeReg,
 		Name:       blobKeyMetadata,
 		Size:       int64(len(data)),
-		Mode:       int64(fs.ModePerm),
+		Mode:       int64(fs.ModeIrregular),
 		ChangeTime: time.Now(),
 		AccessTime: time.Now(),
 		ModTime:    time.Now(),

@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"time"
 
@@ -37,7 +36,7 @@ func WriteUploadAsBlob(name string, entry *fsserver.FileUpload) (*BlobInfo, erro
 		Typeflag:   tar.TypeReg,
 		Name:       blobKeyData,
 		Size:       entry.Size,
-		Mode:       int64(fs.ModePerm),
+		Mode:       int64(os.FileMode(0660).Perm()),
 		ModTime:    entry.Modified,
 		AccessTime: entry.Modified,
 		ChangeTime: entry.Modified,
