@@ -32,7 +32,7 @@ func TempBlobPath(root, name string) string {
 	return path.Join(root, CleanRelativePath(name)+FileExtBlob+FileExtPartial)
 }
 
-func WalkDir(dir string, recursive bool, onFile func(name string) (bool, error)) error {
+func WalkDir(dir string, recursive bool, onFile func(name string) (wantMore bool, err error)) error {
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
