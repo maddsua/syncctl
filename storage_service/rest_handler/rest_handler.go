@@ -1,4 +1,4 @@
-package handler
+package rest_handler
 
 import (
 	"fmt"
@@ -14,12 +14,7 @@ import (
 	s4 "github.com/maddsua/syncctl/storage_service"
 )
 
-type HandleWaiter interface {
-	http.Handler
-	Wait()
-}
-
-func NewFsHandler(storage s4.Storage) HandleWaiter {
+func NewHandler(storage s4.Storage) s4.SyncHandler {
 
 	//	todo: handle auth
 
@@ -60,6 +55,8 @@ func NewFsHandler(storage s4.Storage) HandleWaiter {
 
 	mux.HandleFunc("GET /download", func(wrt http.ResponseWriter, req *http.Request) {
 
+		//	todo: handle ranges
+
 		wg.Add(1)
 		defer wg.Done()
 
@@ -96,6 +93,8 @@ func NewFsHandler(storage s4.Storage) HandleWaiter {
 	})
 
 	mux.HandleFunc("GET /list", func(wrt http.ResponseWriter, req *http.Request) {
+
+		//	todo: handle pagination
 
 		wg.Add(1)
 		defer wg.Done()

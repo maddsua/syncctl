@@ -6,13 +6,23 @@ import (
 	"time"
 )
 
-type Storage interface {
+type BaseStorageController interface {
 	Put(ctx context.Context, entry *FileUpload, overwrite bool) (*FileMetadata, error)
-	Get(ctx context.Context, name string) (*ReadSeekableFile, error)
 	Stat(ctx context.Context, name string) (*FileMetadata, error)
 	Move(ctx context.Context, name string, newName string, overwrite bool) (*FileMetadata, error)
 	Delete(ctx context.Context, name string) (*FileMetadata, error)
 	List(ctx context.Context, prefix string, recursive bool, offset int, limit int) ([]FileMetadata, error)
+}
+
+type Storage interface {
+	BaseStorageController
+	Get(ctx context.Context, name string) (*ReadSeekableFile, error)
+}
+
+type StorageClient interface {
+	BaseStorageController
+	Download(ctx context.Context, name string) (*ReadableFile, error)
+	Ping(ctx context.Context) error
 }
 
 type ReadSeekableFile struct {

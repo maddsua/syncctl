@@ -7,6 +7,11 @@ import (
 
 const PrefixV1 = "/s4/v1/"
 
+type SyncHandler interface {
+	http.Handler
+	Wait()
+}
+
 type APIResponse[T any] struct {
 	Data  T         `json:"data"`
 	Error *APIError `json:"error"`

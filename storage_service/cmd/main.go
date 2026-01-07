@@ -11,7 +11,7 @@ import (
 
 	s4 "github.com/maddsua/syncctl/storage_service"
 	"github.com/maddsua/syncctl/storage_service/blobstorage"
-	"github.com/maddsua/syncctl/storage_service/handler"
+	"github.com/maddsua/syncctl/storage_service/rest_handler"
 )
 
 func main() {
@@ -22,10 +22,10 @@ func main() {
 	//	todo: add tls server
 
 	storage := blobstorage.Storage{
-		RootDir: "data",
+		RootDir: "data/server",
 	}
 
-	fshandler := handler.NewFsHandler(&storage)
+	fshandler := rest_handler.NewHandler(&storage)
 
 	var mux http.ServeMux
 

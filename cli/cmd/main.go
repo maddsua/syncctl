@@ -2,19 +2,22 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
-	"io"
 	"os"
 
-	s4_client "github.com/maddsua/syncctl/storage_service/client"
+	"github.com/maddsua/syncctl/cli"
+	"github.com/maddsua/syncctl/storage_service/rest_client"
 )
 
 func main() {
 
-	client := s4_client.Client{
-		URL: "http://localhost:2000/",
+	client := rest_client.RestClient{
+		RemoteURL: "http://localhost:2000/",
+	}
+
+	if err := cli.Pull(context.Background(), &client, "/pics", "data/client/pics", cli.ResolveOverwrite, true); err != nil {
+		fmt.Println("ERR", err)
+		os.Exit(1)
 	}
 
 	/* entries, err := client.List(context.Background(), "", true, 0, 0)
@@ -27,7 +30,7 @@ func main() {
 		fmt.Println(">", entry)
 	} */
 
-	file, err := client.Download(context.Background(), "/docs/message-to-mr-white.md")
+	/* file, err := client.Download(context.Background(), "/docs/message-to-mr-white.md")
 	if err != nil {
 		fmt.Println("ERR", err)
 		os.Exit(1)
@@ -54,7 +57,7 @@ func main() {
 	if hash != file.SHA256 {
 		fmt.Println("HASH DIDN'T MATCH")
 		os.Exit(2)
-	}
+	} */
 
 	/* broker := blobstorage.Storage{
 		RootDir: "data",

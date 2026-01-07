@@ -12,6 +12,7 @@ import (
 	"time"
 
 	s4 "github.com/maddsua/syncctl/storage_service"
+	"github.com/maddsua/syncctl/utils"
 )
 
 const FileExtBlob = ".blob"
@@ -39,7 +40,7 @@ func WriteUploadAsBlob(name string, entry *s4.FileUpload) (*TempBlobInfo, error)
 	}
 	defer file.Close()
 
-	janitor := FileJanitor{Name: file.Name()}
+	janitor := utils.FileJanitor{Name: file.Name()}
 	defer janitor.Cleanup()
 
 	arc := tar.NewWriter(file)
@@ -134,25 +135,4 @@ func ReadBlobInfo(ctx context.Context, reader *tar.Reader) (*BlobInfo, error) {
 	}
 
 	return &info, nil
-}
-
-type FileJanitor struct {
-	Name string
-
-	//	A flag to tell this cleanup thingy to fuck off.
-	//	Not using atomic values here since it's not intended for concurrent execution,
-	// 	but rather to avoid variable fuckery inside function body
-	released bool
-}
-
-func (janitor *FileJanitor) Release() string {
-	janitor.released = true
-	return janitor.Name
-}
-
-func (janitor *FileJanitor) Cleanup() error {
-	if !janitor.released {
-		return os.Remove(janitor.Name)
-	}
-	return nil
 }

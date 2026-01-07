@@ -1,4 +1,4 @@
-package client
+package rest_client
 
 import (
 	"context"
@@ -12,12 +12,36 @@ import (
 	s4 "github.com/maddsua/syncctl/storage_service"
 )
 
-type Client struct {
-	URL  string
-	Auth url.Userinfo
+type RestClient struct {
+	RemoteURL string
+	Auth      url.Userinfo
 }
 
-func (client *Client) Put(ctx context.Context, entry *s4.FileUpload, overwrite bool) (*s4.FileMetadata, error) {
+func (client *RestClient) Ping(ctx context.Context) error {
+
+	req, err := prepareRequest(client.RemoteURL, &client.Auth, http.MethodGet, "gen_204", nil, nil)
+	if err != nil {
+		return err
+	}
+
+	response, err := executeRequest(req)
+	if err != nil {
+		return err
+	}
+
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusNoContent {
+		return &NetworkError{
+			Message:       "remote unavailable",
+			OriginalError: fmt.Errorf("http status %d", response.StatusCode),
+		}
+	}
+
+	return nil
+}
+
+func (client *RestClient) Put(ctx context.Context, entry *s4.FileUpload, overwrite bool) (*s4.FileMetadata, error) {
 
 	params := url.Values{}
 	params.Set("name", entry.Name)
@@ -26,7 +50,7 @@ func (client *Client) Put(ctx context.Context, entry *s4.FileUpload, overwrite b
 		params.Set("overwrite", "true")
 	}
 
-	req, err := prepareRequest(client.URL, &client.Auth, http.MethodPut, "/upload", params, entry.Reader)
+	req, err := prepareRequest(client.RemoteURL, &client.Auth, http.MethodPut, "/upload", params, entry.Reader)
 	if err != nil {
 		return nil, err
 	}
@@ -41,12 +65,12 @@ func (client *Client) Put(ctx context.Context, entry *s4.FileUpload, overwrite b
 	return executeJSONRequest[*s4.FileMetadata](req)
 }
 
-func (client *Client) Download(ctx context.Context, name string) (*s4.ReadableFile, error) {
+func (client *RestClient) Download(ctx context.Context, name string) (*s4.ReadableFile, error) {
 
 	params := url.Values{}
 	params.Set("name", name)
 
-	req, err := prepareRequest(client.URL, &client.Auth, http.MethodGet, "/download", params, nil)
+	req, err := prepareRequest(client.RemoteURL, &client.Auth, http.MethodGet, "/download", params, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -81,8 +105,6 @@ func (client *Client) Download(ctx context.Context, name string) (*s4.ReadableFi
 	if val, ok := strings.CutPrefix(response.Header.Get("Content-Disposition"), "attachment;"); ok {
 		if val, ok = strings.CutPrefix(strings.TrimSpace(val), "filename="); ok {
 			if val, _ = url.QueryUnescape(strings.TrimSpace(val)); val != "" {
-				//	todo: nuke
-				fmt.Println("got attachmment", val)
 				meta.Name = val
 			}
 		}
@@ -98,12 +120,12 @@ func (client *Client) Download(ctx context.Context, name string) (*s4.ReadableFi
 	}, nil
 }
 
-func (client *Client) Stat(ctx context.Context, name string) (*s4.FileMetadata, error) {
+func (client *RestClient) Stat(ctx context.Context, name string) (*s4.FileMetadata, error) {
 
 	params := url.Values{}
 	params.Set("name", name)
 
-	req, err := prepareRequest(client.URL, &client.Auth, http.MethodGet, "/stat", params, nil)
+	req, err := prepareRequest(client.RemoteURL, &client.Auth, http.MethodGet, "/stat", params, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +133,7 @@ func (client *Client) Stat(ctx context.Context, name string) (*s4.FileMetadata, 
 	return executeJSONRequest[*s4.FileMetadata](req)
 }
 
-func (client *Client) Move(ctx context.Context, name string, newName string, overwrite bool) (*s4.FileMetadata, error) {
+func (client *RestClient) Move(ctx context.Context, name string, newName string, overwrite bool) (*s4.FileMetadata, error) {
 
 	params := url.Values{}
 	params.Set("name", name)
@@ -121,7 +143,7 @@ func (client *Client) Move(ctx context.Context, name string, newName string, ove
 		params.Set("overwrite", "true")
 	}
 
-	req, err := prepareRequest(client.URL, &client.Auth, http.MethodPost, "/move", params, nil)
+	req, err := prepareRequest(client.RemoteURL, &client.Auth, http.MethodPost, "/move", params, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -129,12 +151,12 @@ func (client *Client) Move(ctx context.Context, name string, newName string, ove
 	return executeJSONRequest[*s4.FileMetadata](req)
 }
 
-func (client *Client) Delete(ctx context.Context, name string) (*s4.FileMetadata, error) {
+func (client *RestClient) Delete(ctx context.Context, name string) (*s4.FileMetadata, error) {
 
 	params := url.Values{}
 	params.Set("name", name)
 
-	req, err := prepareRequest(client.URL, &client.Auth, http.MethodDelete, "/delete", params, nil)
+	req, err := prepareRequest(client.RemoteURL, &client.Auth, http.MethodDelete, "/delete", params, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +164,7 @@ func (client *Client) Delete(ctx context.Context, name string) (*s4.FileMetadata
 	return executeJSONRequest[*s4.FileMetadata](req)
 }
 
-func (client *Client) List(ctx context.Context, prefix string, recursive bool, offset int, limit int) ([]s4.FileMetadata, error) {
+func (client *RestClient) List(ctx context.Context, prefix string, recursive bool, offset int, limit int) ([]s4.FileMetadata, error) {
 
 	params := url.Values{}
 	params.Set("prefix", prefix)
@@ -151,7 +173,7 @@ func (client *Client) List(ctx context.Context, prefix string, recursive bool, o
 		params.Set("recursive", "true")
 	}
 
-	req, err := prepareRequest(client.URL, &client.Auth, http.MethodGet, "/list", params, nil)
+	req, err := prepareRequest(client.RemoteURL, &client.Auth, http.MethodGet, "/list", params, nil)
 	if err != nil {
 		return nil, err
 	}
