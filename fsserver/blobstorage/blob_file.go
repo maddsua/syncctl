@@ -7,10 +7,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"time"
 
 	"github.com/maddsua/syncctl/fsserver"
 )
+
+const FileExtBlob = ".blob"
+const FileExtPartial = ".part"
 
 const blobKeyMetadata = "metadata"
 const blobKeyData = "data"
@@ -21,11 +25,16 @@ type BlobInfo struct {
 	Modified time.Time
 }
 
-func WriteUploadAsBlob(name string, entry *fsserver.FileUpload) (*BlobInfo, error) {
+type TempBlobInfo struct {
+	Name string
+	BlobInfo
+}
 
-	file, err := os.Create(name)
+func WriteUploadAsBlob(name string, entry *fsserver.FileUpload) (*TempBlobInfo, error) {
+
+	file, err := os.CreateTemp(path.Split(name))
 	if err != nil {
-		return nil, &BlobError{"create file", err}
+		return nil, &BlobError{"create partial file", err}
 	}
 	defer file.Close()
 
@@ -66,11 +75,18 @@ func WriteUploadAsBlob(name string, entry *fsserver.FileUpload) (*BlobInfo, erro
 		return nil, err
 	}
 
-	return &BlobInfo{
-		BlobMetadata: meta,
-		Size:         entry.Size,
-		Modified:     entry.Modified,
-	}, arc.Close()
+	if err := arc.Close(); err != nil {
+		return nil, err
+	}
+
+	return &TempBlobInfo{
+		Name: file.Name(),
+		BlobInfo: BlobInfo{
+			BlobMetadata: meta,
+			Size:         entry.Size,
+			Modified:     entry.Modified,
+		},
+	}, nil
 }
 
 func ReadBlobInfo(reader *tar.Reader) (*BlobInfo, error) {

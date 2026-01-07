@@ -12,9 +12,6 @@ import (
 	"github.com/maddsua/syncctl/fsserver"
 )
 
-const FileExtBlob = ".blob"
-const FileExtPartial = ".part"
-
 func CleanRelativePath(val string) string {
 	const separator = "/"
 	return path.Clean(separator + strings.TrimRight(val, separator))
@@ -24,12 +21,12 @@ func BlobPath(root, name string) string {
 	return path.Join(root, CleanRelativePath(name)+FileExtBlob)
 }
 
-func StripBlobPath(name, root string) string {
-	return path.Clean(strings.TrimSuffix(strings.TrimPrefix(name, root), FileExtBlob))
+func TempBlobPath(root, name string) string {
+	return path.Join(root, CleanRelativePath(name)+".*"+FileExtPartial)
 }
 
-func TempBlobPath(root, name string) string {
-	return path.Join(root, CleanRelativePath(name)+FileExtBlob+FileExtPartial)
+func StripBlobPath(name, root string) string {
+	return path.Clean(strings.TrimSuffix(strings.TrimPrefix(name, root), FileExtBlob))
 }
 
 func WalkDir(dir string, recursive bool, onFile func(name string) (wantMore bool, err error)) error {
@@ -69,7 +66,6 @@ func (storage *Storage) Put(entry *fsserver.FileUpload, overwrite bool) (*fsserv
 	}
 
 	blobPath := BlobPath(storage.RootDir, entry.Name)
-
 	if _, err := os.Stat(blobPath); err == nil && !overwrite {
 		return nil, &fsserver.FileConflictError{Path: entry.Name}
 	}
@@ -78,14 +74,16 @@ func (storage *Storage) Put(entry *fsserver.FileUpload, overwrite bool) (*fsserv
 		return nil, err
 	}
 
-	tempBlobPath := TempBlobPath(storage.RootDir, entry.Name)
-	if meta, err := WriteUploadAsBlob(tempBlobPath, entry); err != nil {
+	tempBlob, err := WriteUploadAsBlob(TempBlobPath(storage.RootDir, entry.Name), entry)
+	if err != nil {
+		_ = os.Remove(tempBlob.Name)
 		return nil, err
 	} else {
-		entry.FileMetadata.SHA256 = meta.SHA256
+		entry.FileMetadata.SHA256 = tempBlob.SHA256
 	}
 
-	if err := os.Rename(tempBlobPath, blobPath); err != nil {
+	if err := os.Rename(tempBlob.Name, blobPath); err != nil {
+		_ = os.Remove(tempBlob.Name)
 		return nil, err
 	}
 
