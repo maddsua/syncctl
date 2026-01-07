@@ -13,9 +13,13 @@ import (
 	"github.com/maddsua/syncctl/fsserver"
 )
 
-func NewFsHandler(storage fsserver.Storage) http.Handler {
+type HandleWaiter interface {
+	http.Handler
+	Wait()
+}
 
-	//	todo: handle wg
+func NewFsHandler(storage fsserver.Storage) HandleWaiter {
+
 	//	todo: handle auth
 
 	var wg sync.WaitGroup

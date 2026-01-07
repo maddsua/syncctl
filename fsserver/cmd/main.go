@@ -23,12 +23,12 @@ func main() {
 		RootDir: "data",
 	}
 
-	h := handler.NewFsHandler(&storage)
+	fshandler := handler.NewFsHandler(&storage)
 
 	var mux http.ServeMux
 
 	//	s4 stands for Stipidly-Simple-Storage-Service
-	mux.Handle("/s4/v1/", http.StripPrefix("/s4/v1", h))
+	mux.Handle("/s4/v1/", http.StripPrefix("/s4/v1", fshandler))
 
 	srv := http.Server{
 		Handler: &mux,
@@ -62,5 +62,5 @@ func main() {
 
 	_ = srv.Close()
 
-	//	todo: close fs server instance and wait until it's done
+	fshandler.Wait()
 }
