@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -34,20 +35,26 @@ func NewFsHandler(storage s4.Storage) HandleWaiter {
 		wg.Add(1)
 		defer wg.Done()
 
-		size, _ := strconv.ParseInt(req.Header.Get("Content-Length"), 10, 64)
-		modified, _ := time.Parse(time.RFC1123, req.Header.Get("Date"))
-		if modified.IsZero() {
-			modified = time.Now()
+		meta := s4.FileMetadata{
+			Name:     req.URL.Query().Get("name"),
+			Modified: time.Now(),
 		}
 
-		newResponse(storage.Put(&s4.FileUpload{
-			FileMetadata: s4.FileMetadata{
-				Name:     req.URL.Query().Get("name"),
-				Size:     size,
-				Modified: modified,
-				SHA256:   req.Header.Get("Etag"),
-			},
-			Reader: req.Body,
+		if val, _ := strconv.ParseInt(req.Header.Get("Content-Length"), 10, 64); val > 0 {
+			meta.Size = val
+		}
+
+		if val, _ := time.Parse(time.RFC1123, req.Header.Get("Date")); !val.IsZero() {
+			meta.Modified = val
+		}
+
+		if val, ok := strings.CutPrefix(req.Header.Get("Etag"), "sha256="); ok {
+			meta.SHA256 = val
+		}
+
+		newResponse(storage.Put(req.Context(), &s4.FileUpload{
+			FileMetadata: meta,
+			Reader:       req.Body,
 		}, strings.EqualFold(req.URL.Query().Get("overwrite"), "true"))).WriteJSON(wrt)
 	})
 
@@ -56,7 +63,7 @@ func NewFsHandler(storage s4.Storage) HandleWaiter {
 		wg.Add(1)
 		defer wg.Done()
 
-		entry, err := storage.Get(req.URL.Query().Get("name"))
+		entry, err := storage.Get(req.Context(), req.URL.Query().Get("name"))
 		if err != nil {
 			newResponse[any](nil, err).WriteJSON(wrt)
 			return
@@ -67,7 +74,9 @@ func NewFsHandler(storage s4.Storage) HandleWaiter {
 		wrt.Header().Set("Content-Type", "application/octet-stream")
 		wrt.Header().Set("Content-Length", fmt.Sprint(entry.FileMetadata.Size))
 		wrt.Header().Set("Date", entry.FileMetadata.Modified.Format(time.RFC1123))
-		wrt.Header().Set("Etag", entry.FileMetadata.SHA256)
+		wrt.Header().Set("Content-Disposition", "attachment; filename="+url.QueryEscape(entry.Name))
+
+		wrt.Header().Set("Etag", "sha256="+entry.FileMetadata.SHA256)
 
 		wrt.WriteHeader(http.StatusOK)
 
@@ -84,7 +93,7 @@ func NewFsHandler(storage s4.Storage) HandleWaiter {
 	})
 
 	mux.HandleFunc("GET /stat", func(wrt http.ResponseWriter, req *http.Request) {
-		newResponse(storage.Stat(req.URL.Query().Get("name"))).WriteJSON(wrt)
+		newResponse(storage.Stat(req.Context(), req.URL.Query().Get("name"))).WriteJSON(wrt)
 	})
 
 	mux.HandleFunc("GET /list", func(wrt http.ResponseWriter, req *http.Request) {
@@ -93,6 +102,7 @@ func NewFsHandler(storage s4.Storage) HandleWaiter {
 		defer wg.Done()
 
 		newResponse(storage.List(
+			req.Context(),
 			req.URL.Query().Get("prefix"),
 			strings.EqualFold(req.URL.Query().Get("recursive"), "true"),
 			0, 0,
@@ -101,6 +111,7 @@ func NewFsHandler(storage s4.Storage) HandleWaiter {
 
 	mux.HandleFunc("POST /move", func(wrt http.ResponseWriter, req *http.Request) {
 		newResponse(storage.Move(
+			req.Context(),
 			req.URL.Query().Get("name"),
 			req.URL.Query().Get("new_name"),
 			strings.EqualFold(req.URL.Query().Get("overwrite"), "true"),
@@ -109,6 +120,7 @@ func NewFsHandler(storage s4.Storage) HandleWaiter {
 
 	mux.HandleFunc("DELETE /delete", func(wrt http.ResponseWriter, req *http.Request) {
 		newResponse(storage.Delete(
+			req.Context(),
 			req.URL.Query().Get("name"),
 		)).WriteJSON(wrt)
 	})

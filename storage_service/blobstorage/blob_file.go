@@ -2,6 +2,7 @@ package blobstorage
 
 import (
 	"archive/tar"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -92,13 +93,17 @@ func WriteUploadAsBlob(name string, entry *s4.FileUpload) (*TempBlobInfo, error)
 	}, nil
 }
 
-func ReadBlobInfo(reader *tar.Reader) (*BlobInfo, error) {
+func ReadBlobInfo(ctx context.Context, reader *tar.Reader) (*BlobInfo, error) {
 
 	var info BlobInfo
 
 	readSet := map[string]struct{}{}
 
 	for {
+
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 
 		entry, err := reader.Next()
 		if err == io.EOF {

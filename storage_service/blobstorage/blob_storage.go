@@ -2,6 +2,7 @@ package blobstorage
 
 import (
 	"archive/tar"
+	"context"
 	"fmt"
 	"io/fs"
 	"os"
@@ -59,7 +60,7 @@ type Storage struct {
 	lock    sync.Mutex
 }
 
-func (storage *Storage) Put(entry *s4.FileUpload, overwrite bool) (*s4.FileMetadata, error) {
+func (storage *Storage) Put(_ context.Context, entry *s4.FileUpload, overwrite bool) (*s4.FileMetadata, error) {
 
 	if entry.Name = CleanRelativePath(entry.Name); entry.Name == "" {
 		return nil, &s4.NameError{Name: entry.Name}
@@ -89,7 +90,7 @@ func (storage *Storage) Put(entry *s4.FileUpload, overwrite bool) (*s4.FileMetad
 	return &entry.FileMetadata, nil
 }
 
-func (storage *Storage) Get(name string) (*s4.ReadableFile, error) {
+func (storage *Storage) Get(ctx context.Context, name string) (*s4.ReadSeekableFile, error) {
 
 	blobPath := BlobPath(storage.RootDir, name)
 
@@ -103,13 +104,13 @@ func (storage *Storage) Get(name string) (*s4.ReadableFile, error) {
 		return nil, err
 	}
 
-	info, err := ReadBlobInfo(tar.NewReader(file))
+	info, err := ReadBlobInfo(ctx, tar.NewReader(file))
 	if err != nil {
 		_ = file.Close()
 		return nil, fmt.Errorf("read blob info: %v", err)
 	}
 
-	return &s4.ReadableFile{
+	return &s4.ReadSeekableFile{
 		FileMetadata: s4.FileMetadata{
 			Name:     CleanRelativePath(name),
 			Modified: info.Modified,
@@ -122,7 +123,7 @@ func (storage *Storage) Get(name string) (*s4.ReadableFile, error) {
 	}, nil
 }
 
-func (storage *Storage) Stat(name string) (*s4.FileMetadata, error) {
+func (storage *Storage) Stat(ctx context.Context, name string) (*s4.FileMetadata, error) {
 
 	blobPath := BlobPath(storage.RootDir, name)
 
@@ -137,7 +138,7 @@ func (storage *Storage) Stat(name string) (*s4.FileMetadata, error) {
 
 	defer file.Close()
 
-	info, err := ReadBlobInfo(tar.NewReader(file))
+	info, err := ReadBlobInfo(ctx, tar.NewReader(file))
 	if err != nil {
 		return nil, fmt.Errorf("read blob info: %v", err)
 	}
@@ -150,7 +151,7 @@ func (storage *Storage) Stat(name string) (*s4.FileMetadata, error) {
 	}, nil
 }
 
-func (storage *Storage) Move(name, newName string, overwrite bool) (*s4.FileMetadata, error) {
+func (storage *Storage) Move(ctx context.Context, name, newName string, overwrite bool) (*s4.FileMetadata, error) {
 
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
@@ -161,7 +162,7 @@ func (storage *Storage) Move(name, newName string, overwrite bool) (*s4.FileMeta
 		return nil, &s4.NameError{Name: newName}
 	}
 
-	stat, err := storage.Stat(name)
+	stat, err := storage.Stat(ctx, name)
 	if err != nil {
 		return nil, err
 	}
@@ -185,12 +186,12 @@ func (storage *Storage) Move(name, newName string, overwrite bool) (*s4.FileMeta
 	return stat, nil
 }
 
-func (storage *Storage) Delete(name string) (*s4.FileMetadata, error) {
+func (storage *Storage) Delete(ctx context.Context, name string) (*s4.FileMetadata, error) {
 
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
 
-	stat, err := storage.Stat(name)
+	stat, err := storage.Stat(ctx, name)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +204,7 @@ func (storage *Storage) Delete(name string) (*s4.FileMetadata, error) {
 	return stat, nil
 }
 
-func (storage *Storage) List(prefix string, recursive bool, offset, limit int) ([]s4.FileMetadata, error) {
+func (storage *Storage) List(ctx context.Context, prefix string, recursive bool, offset, limit int) ([]s4.FileMetadata, error) {
 
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
@@ -234,7 +235,7 @@ func (storage *Storage) List(prefix string, recursive bool, offset, limit int) (
 		}
 		defer file.Close()
 
-		info, err := ReadBlobInfo(tar.NewReader(file))
+		info, err := ReadBlobInfo(ctx, tar.NewReader(file))
 		if err != nil {
 			return false, err
 		}

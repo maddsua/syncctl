@@ -1,17 +1,14 @@
 package main
 
-import (
-	"fmt"
-	"os"
-
-	"github.com/maddsua/syncctl/storage_service/blobstorage"
-)
+import "fmt"
 
 func main() {
 
-	broker := blobstorage.Storage{
+	fmt.Println("YO")
+
+	/* broker := blobstorage.Storage{
 		RootDir: "data",
-	}
+	} */
 
 	/* file, err := broker.Put(&fsserver.FileUpload{
 		FileMetadata: fsserver.FileMetadata{
@@ -29,16 +26,16 @@ func main() {
 
 	fmt.Println("FILE", file) */
 
-	page, err := broker.List("", true, 0, 0)
+	/* 	page, err := broker.List("", true, 0, 0)
 
-	if err != nil {
-		fmt.Println("ERR", err)
-		os.Exit(1)
-	}
+	   	if err != nil {
+	   		fmt.Println("ERR", err)
+	   		os.Exit(1)
+	   	}
 
-	for _, entry := range page {
-		fmt.Println(">", entry)
-	}
+	   	for _, entry := range page {
+	   		fmt.Println(">", entry)
+	   	} */
 
 	/* 	file, err := broker.Get("/docs/message-to-mr-white.md")
 	   	if err != nil {

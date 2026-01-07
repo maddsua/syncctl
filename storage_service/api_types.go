@@ -32,3 +32,7 @@ type APIError struct {
 	Message  string `json:"message"`
 	WithCode int    `json:"-"`
 }
+
+func (err *APIError) Error() string {
+	return err.Message
+}
