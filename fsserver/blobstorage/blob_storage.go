@@ -76,14 +76,13 @@ func (storage *Storage) Put(entry *fsserver.FileUpload, overwrite bool) (*fsserv
 
 	tempBlob, err := WriteUploadAsBlob(TempBlobPath(storage.RootDir, entry.Name), entry)
 	if err != nil {
-		_ = os.Remove(tempBlob.Name)
 		return nil, err
-	} else {
-		entry.FileMetadata.SHA256 = tempBlob.SHA256
 	}
+	defer os.Remove(tempBlob.Name)
+
+	entry.FileMetadata.SHA256 = tempBlob.SHA256
 
 	if err := os.Rename(tempBlob.Name, blobPath); err != nil {
-		_ = os.Remove(tempBlob.Name)
 		return nil, err
 	}
 
