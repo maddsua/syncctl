@@ -45,7 +45,7 @@ func WalkDir(dir string, recursive bool, onFile func(name string) (bool, error))
 			if err := WalkDir(name, recursive, onFile); err != nil {
 				return err
 			}
-		} else if entry.Type().IsRegular() {
+		} else if entry.Type().IsRegular() && path.Ext(name) == FileExtBlob {
 			if wantMore, err := onFile(name); err != nil {
 				return err
 			} else if !wantMore {
@@ -214,10 +214,6 @@ func (storage *Storage) List(prefix string, recursive bool, offset, limit int) (
 	var pageIdx int
 
 	var onFile = func(name string) (bool, error) {
-
-		if path.Ext(name) != FileExtBlob {
-			return true, nil
-		}
 
 		pageIdx++
 
