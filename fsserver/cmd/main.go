@@ -7,6 +7,9 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/maddsua/syncctl/fsserver/blobstorage"
+	"github.com/maddsua/syncctl/fsserver/handler"
 )
 
 func main() {
@@ -16,7 +19,16 @@ func main() {
 
 	//	todo: add tls server
 
+	storage := blobstorage.Storage{
+		RootDir: "data",
+	}
+
+	h := handler.NewFsHandler(&storage)
+
 	var mux http.ServeMux
+
+	//	s4 stands for Stipidly-Simple-Storage-Service
+	mux.Handle("/s4/v1/", http.StripPrefix("/s4/v1", h))
 
 	srv := http.Server{
 		Handler: &mux,

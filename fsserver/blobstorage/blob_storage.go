@@ -158,6 +158,10 @@ func (storage *Storage) Move(name, newName string, overwrite bool) (*fsserver.Fi
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
 
+	if name == "" || newName == "" {
+		return nil, fsserver.ErrInvalidFileName
+	}
+
 	stat, err := storage.Stat(name)
 	if err != nil {
 		return nil, err
@@ -210,7 +214,7 @@ func (storage *Storage) List(prefix string, recursive bool, offset, limit int) (
 		return nil, nil
 	}
 
-	var results []fsserver.FileMetadata
+	results := make([]fsserver.FileMetadata, 0)
 	var pageIdx int
 
 	var onFile = func(name string) (bool, error) {
