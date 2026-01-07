@@ -118,8 +118,25 @@ type fsHandler struct {
 }
 
 func newResponse[T any](val T, err error) *fsserver.APIResponse[T] {
+
+	var getErrorCode = func(err error) int {
+		switch err {
+		case fsserver.ErrNoFile:
+			return http.StatusNotFound
+		case fsserver.ErrFileConflict:
+			return http.StatusConflict
+		default:
+			return -1
+		}
+	}
+
 	if err != nil {
-		return &fsserver.APIResponse[T]{Error: &fsserver.APIError{Message: err.Error()}}
+		return &fsserver.APIResponse[T]{
+			Error: &fsserver.APIError{
+				Message:  err.Error(),
+				WithCode: getErrorCode(err),
+			},
+		}
 	}
 	return &fsserver.APIResponse[T]{Data: val}
 }

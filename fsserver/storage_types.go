@@ -30,23 +30,3 @@ type FileMetadata struct {
 	Modified time.Time `json:"mod"`
 	SHA256   string    `json:"sha256"`
 }
-
-type StorageError struct {
-	Message string `json:"message"`
-}
-
-func (err *StorageError) Error() string {
-	return err.Message
-}
-
-var ErrNoFile = &StorageError{
-	Message: "file not found",
-}
-
-var ErrFileConflict = &StorageError{
-	Message: "file conflict",
-}
-
-var ErrInvalidFileName = &StorageError{
-	Message: "invalid file name",
-}

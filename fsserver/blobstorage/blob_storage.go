@@ -181,6 +181,8 @@ func (storage *Storage) Move(name, newName string, overwrite bool) (*fsserver.Fi
 		return nil, err
 	}
 
+	stat.Name = CleanRelativePath(newName)
+
 	return stat, nil
 }
 

@@ -15,7 +15,11 @@ func (response *APIResponse[T]) WriteJSON(wrt http.ResponseWriter) {
 	wrt.Header().Set("Content-Type", "application/json")
 
 	if response.Error != nil {
-		wrt.WriteHeader(http.StatusBadRequest)
+		if response.Error.WithCode >= http.StatusBadRequest {
+			wrt.WriteHeader(response.Error.WithCode)
+		} else {
+			wrt.WriteHeader(http.StatusBadRequest)
+		}
 	}
 
 	enc := json.NewEncoder(wrt)
@@ -25,5 +29,6 @@ func (response *APIResponse[T]) WriteJSON(wrt http.ResponseWriter) {
 }
 
 type APIError struct {
-	Message string `json:"message"`
+	Message  string `json:"message"`
+	WithCode int    `json:"-"`
 }
