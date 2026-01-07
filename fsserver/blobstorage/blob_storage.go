@@ -24,8 +24,37 @@ func BlobPath(root, name string) string {
 	return path.Join(root, CleanRelativePath(name)+FileExtBlob)
 }
 
+func StripBlobPath(name, root string) string {
+	return path.Clean(strings.TrimSuffix(strings.TrimPrefix(name, root), FileExtBlob))
+}
+
 func TempBlobPath(root, name string) string {
 	return path.Join(root, CleanRelativePath(name)+FileExtBlob+FileExtPartial)
+}
+
+func WalkDir(dir string, recursive bool, onFile func(name string) (bool, error)) error {
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		name := path.Join(dir, entry.Name())
+		if entry.IsDir() && recursive {
+			if err := WalkDir(name, recursive, onFile); err != nil {
+				return err
+			}
+		} else if entry.Type().IsRegular() {
+			if wantMore, err := onFile(name); err != nil {
+				return err
+			} else if !wantMore {
+				break
+			}
+		}
+	}
+
+	return nil
 }
 
 type Storage struct {
@@ -169,4 +198,59 @@ func (storage *Storage) Delete(name string) (*fsserver.FileMetadata, error) {
 	return stat, nil
 }
 
-//	todo: add listings
+func (storage *Storage) List(prefix string, recursive bool, offset, limit int) ([]fsserver.FileMetadata, error) {
+
+	storage.lock.Lock()
+	defer storage.lock.Unlock()
+
+	dir := path.Join(storage.RootDir, prefix)
+
+	stat, _ := os.Stat(dir)
+	if stat == nil || !stat.IsDir() {
+		return nil, nil
+	}
+
+	var results []fsserver.FileMetadata
+	var pageIdx int
+
+	var onFile = func(name string) (bool, error) {
+
+		if path.Ext(name) != FileExtBlob {
+			return true, nil
+		}
+
+		pageIdx++
+
+		if offset > 0 && pageIdx <= offset {
+			return true, nil
+		} else if limit > 0 && len(results) >= limit {
+			return false, nil
+		}
+
+		file, err := os.Open(name)
+		if err != nil {
+			return false, err
+		}
+		defer file.Close()
+
+		info, err := ReadBlobInfo(tar.NewReader(file))
+		if err != nil {
+			return false, err
+		}
+
+		results = append(results, fsserver.FileMetadata{
+			Name:     StripBlobPath(name, storage.RootDir),
+			Size:     info.Size,
+			Modified: info.Modified,
+			SHA256:   info.SHA256,
+		})
+
+		return true, nil
+	}
+
+	if err := WalkDir(dir, recursive, onFile); err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}

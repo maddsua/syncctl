@@ -1,12 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"os"
-	"time"
 
-	"github.com/maddsua/syncctl/fsserver"
 	"github.com/maddsua/syncctl/fsserver/blobstorage"
 )
 
@@ -16,9 +13,9 @@ func main() {
 		RootDir: "data",
 	}
 
-	file, err := broker.Put(&fsserver.FileUpload{
+	/* file, err := broker.Put(&fsserver.FileUpload{
 		FileMetadata: fsserver.FileMetadata{
-			Name:     "/docs/message-to-mr-white.md",
+			Name:     "/docs/readme.md",
 			Modified: time.Now(),
 			Size:     15,
 		},
@@ -30,18 +27,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Println("FILE", file)
+	fmt.Println("FILE", file) */
 
-	/* page, err := broker.List(context.Background(), "", "", time.Time{}, time.Time{}, 0, 0)
+	page, err := broker.List("", true, 0, 0)
 
 	if err != nil {
 		fmt.Println("ERR", err)
 		os.Exit(1)
 	}
 
-	for _, entry := range page.Entries {
+	for _, entry := range page {
 		fmt.Println(">", entry)
-	} */
+	}
 
 	/* 	file, err := broker.Get("/docs/message-to-mr-white.md")
 	   	if err != nil {
