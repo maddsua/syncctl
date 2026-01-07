@@ -32,6 +32,9 @@ func NewFsHandler(storage fsserver.Storage) http.Handler {
 
 		size, _ := strconv.ParseInt(req.Header.Get("Content-Length"), 10, 64)
 		modified, _ := time.Parse(time.RFC1123, req.Header.Get("Date"))
+		if modified.IsZero() {
+			modified = time.Now()
+		}
 
 		newResponse(storage.Put(&fsserver.FileUpload{
 			FileMetadata: fsserver.FileMetadata{
