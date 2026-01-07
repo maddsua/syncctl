@@ -65,13 +65,13 @@ type Storage struct {
 func (storage *Storage) Put(entry *fsserver.FileUpload, overwrite bool) (*fsserver.FileMetadata, error) {
 
 	if entry.Name = CleanRelativePath(entry.Name); entry.Name == "" {
-		return nil, fsserver.ErrInvalidFileName
+		return nil, &fsserver.NameError{Name: entry.Name}
 	}
 
 	blobPath := BlobPath(storage.RootDir, entry.Name)
 
 	if _, err := os.Stat(blobPath); err == nil && !overwrite {
-		return nil, fsserver.ErrFileConflict
+		return nil, &fsserver.FileConflictError{Path: entry.Name}
 	}
 
 	if err := os.MkdirAll(path.Dir(blobPath), fs.ModePerm); err != nil {
@@ -98,7 +98,7 @@ func (storage *Storage) Get(name string) (*fsserver.ReadableFile, error) {
 
 	stat, err := os.Stat(blobPath)
 	if err != nil || !stat.Mode().IsRegular() {
-		return nil, fsserver.ErrNoFile
+		return nil, &fsserver.FileNotFoundError{Path: name}
 	}
 
 	file, err := os.Open(blobPath)
@@ -130,7 +130,7 @@ func (storage *Storage) Stat(name string) (*fsserver.FileMetadata, error) {
 	blobPath := BlobPath(storage.RootDir, name)
 
 	if _, err := os.Stat(blobPath); err != nil {
-		return nil, fsserver.ErrNoFile
+		return nil, &fsserver.FileNotFoundError{Path: name}
 	}
 
 	file, err := os.Open(blobPath)
@@ -158,8 +158,10 @@ func (storage *Storage) Move(name, newName string, overwrite bool) (*fsserver.Fi
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
 
-	if name == "" || newName == "" {
-		return nil, fsserver.ErrInvalidFileName
+	if name == "" {
+		return nil, &fsserver.NameError{Name: name}
+	} else if newName == "" {
+		return nil, &fsserver.NameError{Name: newName}
 	}
 
 	stat, err := storage.Stat(name)
@@ -170,7 +172,7 @@ func (storage *Storage) Move(name, newName string, overwrite bool) (*fsserver.Fi
 	blobPath := BlobPath(storage.RootDir, name)
 	newBlobPath := BlobPath(storage.RootDir, newName)
 	if _, err := os.Stat(newBlobPath); err == nil && !overwrite {
-		return nil, fsserver.ErrFileConflict
+		return nil, &fsserver.FileConflictError{Path: name}
 	}
 
 	if err := os.MkdirAll(path.Dir(newBlobPath), os.ModePerm); err != nil {
