@@ -1,7 +1,6 @@
 package rest_handler
 
 import (
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -47,7 +46,7 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 			meta.SHA256 = val
 		}
 
-		newResponse(storage.Put(req.Context(), &s4.FileUpload{
+		NewGenericResponse(storage.Put(req.Context(), &s4.FileUpload{
 			FileMetadata: meta,
 			Reader:       req.Body,
 		}, strings.EqualFold(req.URL.Query().Get("overwrite"), "true"))).WriteJSON(wrt)
@@ -55,30 +54,52 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 
 	mux.HandleFunc("GET /download", func(wrt http.ResponseWriter, req *http.Request) {
 
-		//	todo: handle ranges
-
 		wg.Add(1)
 		defer wg.Done()
 
-		entry, err := storage.Get(req.Context(), req.URL.Query().Get("name"))
+		file, err := storage.Get(req.Context(), req.URL.Query().Get("name"))
 		if err != nil {
-			newResponse[any](nil, err).WriteJSON(wrt)
+			NewErrorResponse(err).WriteJSON(wrt)
 			return
 		}
 
-		defer entry.ReadSeekCloser.Close()
+		defer file.ReadSeekCloser.Close()
+
+		dataRange := ByteRange{TotalSize: file.Size}
+		if err := dataRange.Parse(req.Header.Get("Range")); err != nil {
+			NewErrorResponseWithCode(err.Error(), http.StatusRequestedRangeNotSatisfiable).WriteJSON(wrt)
+			return
+		}
 
 		wrt.Header().Set("Content-Type", "application/octet-stream")
-		wrt.Header().Set("Content-Length", fmt.Sprint(entry.FileMetadata.Size))
-		wrt.Header().Set("Date", entry.FileMetadata.Modified.Format(time.RFC1123))
-		wrt.Header().Set("Content-Disposition", "attachment; filename="+url.QueryEscape(entry.Name))
-		wrt.Header().Set("Etag", "sha256="+entry.FileMetadata.SHA256)
+		wrt.Header().Set("Date", file.FileMetadata.Modified.Format(time.RFC1123))
+		wrt.Header().Set("Content-Disposition", "attachment; filename="+url.QueryEscape(file.Name))
+		wrt.Header().Set("Etag", "sha256="+file.FileMetadata.SHA256)
+		wrt.Header().Set("Accept-Ranges", "bytes")
 
-		wrt.WriteHeader(http.StatusOK)
+		if !dataRange.IsZero() {
+			wrt.Header().Set("Content-Length", strconv.FormatInt(dataRange.Size(), 10))
+			wrt.Header().Set("Content-Range", dataRange.String())
+			wrt.WriteHeader(http.StatusPartialContent)
+		} else {
+			wrt.Header().Set("Content-Length", strconv.FormatInt(file.FileMetadata.Size, 10))
+			wrt.WriteHeader(http.StatusOK)
+		}
 
-		if _, err := io.Copy(wrt, entry.ReadSeekCloser); err != nil {
+		if dataRange.Start > 0 {
+			if _, err := file.ReadSeekCloser.Seek(dataRange.Start, io.SeekStart); err != nil {
+				NewErrorResponseWithCode(err.Error(), http.StatusInternalServerError).WriteJSON(wrt)
+			}
+		}
+
+		var bodyReader io.Reader = file.ReadSeekCloser
+		if dataRange.End > 0 {
+			bodyReader = io.LimitReader(file.ReadSeekCloser, dataRange.Size())
+		}
+
+		if _, err := io.Copy(wrt, bodyReader); err != nil {
 			slog.Error("Serve file",
-				slog.String("name", entry.Name),
+				slog.String("name", file.Name),
 				slog.String("err", err.Error()))
 			return
 		}
@@ -89,7 +110,7 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 	})
 
 	mux.HandleFunc("GET /stat", func(wrt http.ResponseWriter, req *http.Request) {
-		newResponse(storage.Stat(req.Context(), req.URL.Query().Get("name"))).WriteJSON(wrt)
+		NewGenericResponse(storage.Stat(req.Context(), req.URL.Query().Get("name"))).WriteJSON(wrt)
 	})
 
 	mux.HandleFunc("GET /list", func(wrt http.ResponseWriter, req *http.Request) {
@@ -100,7 +121,7 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 		wg.Add(1)
 		defer wg.Done()
 
-		newResponse(storage.List(
+		NewGenericResponse(storage.List(
 			req.Context(),
 			req.URL.Query().Get("prefix"),
 			strings.EqualFold(req.URL.Query().Get("recursive"), "true"),
@@ -110,7 +131,7 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 	})
 
 	mux.HandleFunc("POST /move", func(wrt http.ResponseWriter, req *http.Request) {
-		newResponse(storage.Move(
+		NewGenericResponse(storage.Move(
 			req.Context(),
 			req.URL.Query().Get("name"),
 			req.URL.Query().Get("new_name"),
@@ -119,7 +140,7 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 	})
 
 	mux.HandleFunc("DELETE /delete", func(wrt http.ResponseWriter, req *http.Request) {
-		newResponse(storage.Delete(
+		NewGenericResponse(storage.Delete(
 			req.Context(),
 			req.URL.Query().Get("name"),
 		)).WriteJSON(wrt)
@@ -134,31 +155,4 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 type fsHandler struct {
 	*http.ServeMux
 	*sync.WaitGroup
-}
-
-func newResponse[T any](val T, err error) *s4.APIResponse[T] {
-
-	var getErrorCode = func(err error) int {
-
-		switch err.(type) {
-		case *s4.FileNotFoundError:
-			return http.StatusNotFound
-		case *s4.FileConflictError:
-			return http.StatusConflict
-		case *s4.NameError:
-			return http.StatusBadRequest
-		default:
-			return http.StatusInternalServerError
-		}
-	}
-
-	if err != nil {
-		return &s4.APIResponse[T]{
-			Error: &s4.APIError{
-				Message:  err.Error(),
-				WithCode: getErrorCode(err),
-			},
-		}
-	}
-	return &s4.APIResponse[T]{Data: val}
 }
