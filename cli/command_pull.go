@@ -10,6 +10,8 @@ import (
 	s4 "github.com/maddsua/syncctl/storage_service"
 )
 
+//	todo: color the output. maybe with: https://github.com/charmbracelet/lipgloss
+
 func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir string, onconflict FileConflicResolution, prune bool) error {
 
 	if onconflict == ResolveAsVersions && prune {
