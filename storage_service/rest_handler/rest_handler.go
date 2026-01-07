@@ -94,7 +94,8 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 
 	mux.HandleFunc("GET /list", func(wrt http.ResponseWriter, req *http.Request) {
 
-		//	todo: handle pagination
+		limit, _ := strconv.Atoi(req.URL.Query().Get("limit"))
+		offset, _ := strconv.Atoi(req.URL.Query().Get("offset"))
 
 		wg.Add(1)
 		defer wg.Done()
@@ -103,7 +104,8 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 			req.Context(),
 			req.URL.Query().Get("prefix"),
 			strings.EqualFold(req.URL.Query().Get("recursive"), "true"),
-			0, 0,
+			offset,
+			limit,
 		)).WriteJSON(wrt)
 	})
 
