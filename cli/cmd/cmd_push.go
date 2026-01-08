@@ -98,7 +98,12 @@ func pushEntry(ctx context.Context, client s4.StorageClient, name, remotePath st
 
 		case syncctl.ResolveAsVersions:
 
-			//	todo: check naming and shit
+			//	todo: refactor HighestFileVersion to work with maps
+			//	todo: diff versions
+			//	todo: pick a new name or bail
+
+			//	todo: maybe would have to fuck with the way prefix filtering works on the server
+
 			return fmt.Errorf("'ResolveAsVersions' not implemented yet")
 
 		default:
