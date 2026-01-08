@@ -13,9 +13,6 @@ import (
 	s4 "github.com/maddsua/syncctl/storage_service"
 )
 
-//	todo: wrap all of this into a proper command
-//	todo: color the output. maybe with: https://github.com/charmbracelet/lipgloss
-
 func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir string, onconflict ConflictResolutionPolicy, prune bool) error {
 
 	if onconflict == ResolveAsVersions {
@@ -26,7 +23,7 @@ func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir stri
 
 	if prune {
 
-		fmt.Println("Indexing local files at", localDir)
+		fmt.Println("Indexing local files...")
 
 		entries, err := ListAllRegular(localDir)
 		if err != nil {
@@ -40,13 +37,13 @@ func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir stri
 		}
 	}
 
-	fmt.Println("Fetching remote index for", remoteDir)
+	fmt.Println("Fetching remote index...")
 
 	remoteFiles, err := client.List(ctx, remoteDir, true, 0, 0)
 	if err != nil {
 		return err
 	} else if len(remoteFiles) == 0 {
-		fmt.Println("No files on the remote")
+		fmt.Println("No files on the remote. Exiting.")
 		return nil
 	}
 
@@ -55,6 +52,8 @@ func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir stri
 		localPath := path.Join(localDir, strings.TrimPrefix(path.Clean(entry.Name), path.Clean(remoteDir)))
 
 		if err := pullEntry(ctx, client, localPath, onconflict, &entry); err != nil {
+			fmt.Fprintf(os.Stderr, "--X Error pulling '%s':\n", entry.Name)
+			fmt.Fprintf(os.Stderr, "    %v\n", err)
 			return err
 		}
 
@@ -64,12 +63,14 @@ func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir stri
 	if prune && pruneMap != nil {
 
 		for name := range pruneMap {
-			fmt.Println("Prune", name)
 			if err := os.Remove(name); err != nil {
 				return err
 			}
+			fmt.Println("--> Prune", name)
 		}
 	}
+
+	fmt.Println("Sync complete")
 
 	return nil
 }
@@ -79,7 +80,7 @@ func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, o
 	if stat, err := FileContentStat(localPath); err != nil {
 		return err
 	} else if stat == nil {
-		fmt.Println("Copying", localPath)
+		fmt.Printf("--> Downloading '%s' (%s)\n", localPath, DataSizeString(float64(entry.Size)))
 	} else {
 
 		switch onconflict {
@@ -88,10 +89,10 @@ func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, o
 
 			if stat.SHA256 == entry.SHA256 {
 
-				fmt.Println("No changes for", localPath)
+				fmt.Printf("--> Up to date '%s'\n", localPath)
 
 				if !stat.Modified.Equal(entry.Modified) {
-					fmt.Println("Update mtime for", localPath)
+					fmt.Printf("    --> Update mtime '%s'\n", localPath)
 					if err := os.Chtimes(localPath, entry.Modified, entry.Modified); err != nil {
 						return err
 					}
@@ -100,12 +101,12 @@ func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, o
 				return nil
 			}
 
-			fmt.Println("Updating", localPath)
+			fmt.Printf("--> Updating '%s' (%s)\n", localPath, DataSizeString(float64(entry.Size)))
 
 		case ResolveAsVersions:
 
 			if stat.SHA256 == entry.SHA256 {
-				fmt.Println("No changes for", localPath)
+				fmt.Printf("--> Up to date '%s'\n", localPath)
 				return nil
 			}
 
@@ -116,17 +117,17 @@ func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, o
 
 			if hash, err := FileSha256HashString(WithFileIdx(localPath, idx)); err != nil {
 				localPath = WithFileIdx(localPath, idx)
-				fmt.Println("Updating", localPath, "version", idx)
+				fmt.Printf("--> Updating version %d of '%s'\n", idx, localPath)
 			} else if hash != entry.SHA256 {
-				fmt.Println("Adding version", localPath, idx+1)
+				fmt.Printf("--> Adding version %d to '%s'\n", idx+1, localPath)
 				localPath = WithFileIdx(localPath, idx+1)
 			} else {
-				fmt.Println("No new versions", localPath)
+				fmt.Printf("--> Up to date '%s'\n", localPath)
 				return nil
 			}
 
 		default:
-			fmt.Println("Skipping existing", localPath)
+			fmt.Printf("--> Skipping '%s'\n", localPath)
 			return nil
 		}
 	}
@@ -143,7 +144,7 @@ func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, o
 
 	hasher := sha256.New()
 
-	//	todo: add progress
+	//	todo: add a progress bar
 
 	tmpFile, err := WriteTempFile(localDirName, tempBaseName, io.TeeReader(blob.ReadCloser, hasher))
 	if err != nil {
@@ -152,7 +153,7 @@ func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, o
 	defer tmpFile.Cleanup()
 
 	if hash := hex.EncodeToString(hasher.Sum(nil)); hash != entry.SHA256 {
-		return fmt.Errorf("Hash mismatch: '%s' instead of '%s'", hash, entry.SHA256)
+		return fmt.Errorf("content hash mismatch: expected '%s', have '%s'", entry.SHA256, hash)
 	}
 
 	if err := os.Chtimes(tmpFile.Name, blob.Modified, blob.Modified); err != nil {

@@ -79,14 +79,18 @@ func main() {
 						return metacli.Exit("How the fuck do you expect it to keep more than one version while also prunnig everything that's not on the remote?????????????", 1)
 					}
 
-					return cli.Pull(
+					if err := cli.Pull(
 						ctx,
 						&client,
 						remoteDir,
 						localDir,
 						onConflict,
 						prune,
-					)
+					); err != nil {
+						return metacli.Exit("Pull aborted", 1)
+					}
+
+					return nil
 				},
 			},
 		},
