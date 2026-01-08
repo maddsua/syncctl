@@ -34,7 +34,8 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 			Modified: time.Now(),
 		}
 
-		if val, _ := strconv.ParseInt(req.Header.Get("Content-Length"), 10, 64); val > 0 {
+		//	todo: fix header name
+		if val, _ := strconv.ParseInt(req.Header.Get("X-Content-Length"), 10, 64); val > 0 {
 			meta.Size = val
 		}
 

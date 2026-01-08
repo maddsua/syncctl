@@ -33,7 +33,7 @@ func prepareRequest(baseUrl string, auth *url.Userinfo, operationMethod, operati
 		return nil, err
 	}
 
-	requestURL.Path = path.Join(requestURL.Path, s4.PrefixV1, operationPath)
+	requestURL.Path = path.Join(requestURL.Path, s4.UrlPrefixV1, operationPath)
 
 	if operationParams != nil {
 		requestURL.RawQuery = operationParams.Encode()
@@ -44,7 +44,7 @@ func prepareRequest(baseUrl string, auth *url.Userinfo, operationMethod, operati
 		return nil, err
 	}
 
-	if auth != nil {
+	if auth != nil && auth.Username() != "" {
 		password, _ := auth.Password()
 		req.SetBasicAuth(auth.Username(), password)
 	}

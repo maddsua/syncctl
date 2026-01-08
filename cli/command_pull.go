@@ -13,24 +13,24 @@ import (
 	s4 "github.com/maddsua/syncctl/storage_service"
 )
 
+//	todo: fix error handling
+
 func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir string, onconflict ConflictResolutionPolicy, prune bool) error {
 
 	if onconflict == ResolveAsVersions {
 		prune = false
 	}
 
-	var pruneMap map[string]struct{}
+	pruneMap := map[string]struct{}{}
 
 	if prune {
 
 		fmt.Println("Indexing local files...")
 
-		entries, err := ListAllRegular(localDir)
+		entries, err := ListAllRegularFiles(localDir)
 		if err != nil {
 			return err
 		}
-
-		pruneMap = map[string]struct{}{}
 
 		for _, entry := range entries {
 			pruneMap[path.Clean(entry)] = struct{}{}
@@ -60,8 +60,7 @@ func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir stri
 		delete(pruneMap, localPath)
 	}
 
-	if prune && pruneMap != nil {
-
+	if prune {
 		for name := range pruneMap {
 			if err := os.Remove(name); err != nil {
 				return err
@@ -70,28 +69,33 @@ func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir stri
 		}
 	}
 
-	fmt.Println("Sync complete")
+	fmt.Println("Pull complete")
 
 	return nil
 }
 
 func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, onconflict ConflictResolutionPolicy, entry *s4.FileMetadata) error {
 
-	if stat, err := FileContentStat(localPath); err != nil {
+	if stat, err := os.Stat(localPath); err != nil {
 		return err
 	} else if stat == nil {
 		fmt.Printf("--> Downloading '%s' (%s)\n", localPath, DataSizeString(float64(entry.Size)))
 	} else {
 
+		hash, err := NamedFileHashSha256(localPath)
+		if err != nil {
+			return err
+		}
+
 		switch onconflict {
 
 		case ResolveOverwrite:
 
-			if stat.SHA256 == entry.SHA256 {
+			if hash == entry.SHA256 {
 
 				fmt.Printf("--> Up to date '%s'\n", localPath)
 
-				if !stat.Modified.Equal(entry.Modified) {
+				if !stat.ModTime().Equal(entry.Modified) {
 					fmt.Printf("    --> Update mtime '%s'\n", localPath)
 					if err := os.Chtimes(localPath, entry.Modified, entry.Modified); err != nil {
 						return err
@@ -105,7 +109,7 @@ func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, o
 
 		case ResolveAsVersions:
 
-			if stat.SHA256 == entry.SHA256 {
+			if hash == entry.SHA256 {
 				fmt.Printf("--> Up to date '%s'\n", localPath)
 				return nil
 			}
@@ -115,7 +119,7 @@ func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, o
 				return err
 			}
 
-			if hash, err := FileSha256HashString(WithFileIdx(localPath, idx)); err != nil {
+			if hash, err := NamedFileHashSha256(WithFileIdx(localPath, idx)); err != nil {
 				localPath = WithFileIdx(localPath, idx)
 				fmt.Printf("--> Updating version %d of '%s'\n", idx, localPath)
 			} else if hash != entry.SHA256 {

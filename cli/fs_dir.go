@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-func ListAllRegular(name string) ([]string, error) {
+func ListAllRegularFiles(name string) ([]string, error) {
 
 	if stat, err := os.Stat(name); err != nil {
 		if err := os.MkdirAll(name, os.ModePerm); err != nil {
@@ -38,7 +38,7 @@ func ListAllRegular(name string) ([]string, error) {
 			continue
 		}
 
-		next, err := ListAllRegular(nextName)
+		next, err := ListAllRegularFiles(nextName)
 		if len(next) > 0 {
 			result = append(result, next...)
 		}

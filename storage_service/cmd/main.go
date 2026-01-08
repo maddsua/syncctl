@@ -30,7 +30,7 @@ func main() {
 	var mux http.ServeMux
 
 	//	s4 stands for Stipidly-Simple-Storage-Service, btw
-	mux.Handle(s4.PrefixV1, http.StripPrefix(strings.TrimRight(s4.PrefixV1, "/"), fshandler))
+	mux.Handle(s4.UrlPrefixV1, http.StripPrefix(strings.TrimRight(s4.UrlPrefixV1, "/"), fshandler))
 
 	srv := http.Server{
 		Handler: &mux,

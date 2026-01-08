@@ -5,35 +5,11 @@ import (
 	"encoding/hex"
 	"io"
 	"os"
-	"time"
 
 	"github.com/maddsua/syncctl/utils"
 )
 
-type FileContentStats struct {
-	Modified time.Time
-	SHA256   string
-}
-
-func FileContentStat(name string) (*FileContentStats, error) {
-
-	stat, _ := os.Stat(name)
-	if stat == nil {
-		return nil, nil
-	}
-
-	hash, err := FileSha256HashString(name)
-	if err != nil {
-		return nil, err
-	}
-
-	return &FileContentStats{
-		Modified: stat.ModTime(),
-		SHA256:   hash,
-	}, nil
-}
-
-func FileSha256HashString(name string) (string, error) {
+func NamedFileHashSha256(name string) (string, error) {
 
 	hasher := sha256.New()
 
@@ -44,6 +20,21 @@ func FileSha256HashString(name string) (string, error) {
 	defer file.Close()
 
 	if _, err := io.Copy(hasher, file); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+func FileHashSha256(file *os.File) (string, error) {
+
+	hasher := sha256.New()
+
+	if _, err := io.Copy(hasher, file); err != nil {
+		return "", err
+	}
+
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
 		return "", err
 	}
 

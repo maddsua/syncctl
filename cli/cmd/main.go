@@ -37,7 +37,6 @@ func main() {
 	cmd := &metacli.Command{
 		Commands: []*metacli.Command{
 			{
-
 				Name:  "pull",
 				Usage: "Pulls your stupid files from the remote",
 				Arguments: []metacli.Argument{
@@ -56,7 +55,7 @@ func main() {
 					&metacli.GenericFlag{
 						Name:  "conflict",
 						Value: cli.ConflictFlagValue,
-						Usage: fmt.Sprintf("What do when a file with the same name already exists [%s]",
+						Usage: fmt.Sprintf("How to handle files that already exist locally? [%s]",
 							strings.Join(cli.ConflictFlagValue.Options, "|")),
 					},
 				},
@@ -75,6 +74,7 @@ func main() {
 					onConflict := cli.ConflictResolutionPolicy(cmd.String("conflict"))
 					prune := cmd.Bool("prune")
 
+					//	todo: dedup
 					if onConflict == cli.ResolveAsVersions && prune {
 						return metacli.Exit("How the fuck do you expect it to keep more than one version while also prunnig everything that's not on the remote?????????????", 1)
 					}
@@ -87,7 +87,66 @@ func main() {
 						onConflict,
 						prune,
 					); err != nil {
+						//	todo: handle
 						return metacli.Exit("Pull aborted", 1)
+					}
+
+					return nil
+				},
+			},
+			{
+				Name:  "push",
+				Usage: "Pushes your stupid local files to the remote",
+				Arguments: []metacli.Argument{
+					&metacli.StringArg{
+						Name: "local_dir",
+					},
+					&metacli.StringArg{
+						Name: "remote_dir",
+					},
+				},
+				Flags: []metacli.Flag{
+					&metacli.BoolFlag{
+						Name:  "prune",
+						Usage: "Whether or not to nuke all the files that aren't present locally",
+					},
+					&metacli.GenericFlag{
+						Name:  "conflict",
+						Value: cli.ConflictFlagValue,
+						Usage: fmt.Sprintf("How to handle files that already exist on the remote? [%s]",
+							strings.Join(cli.ConflictFlagValue.Options, "|")),
+					},
+				},
+				Action: func(ctx context.Context, cmd *metacli.Command) error {
+
+					//	todo: support setting these from global-ish config
+					localDir := cmd.StringArg("local_dir")
+					remoteDir := cmd.StringArg("remote_dir")
+
+					if remoteDir == "" && localDir == "" {
+						return metacli.Exit("Yo! You forgot to tell the thing where to pull them files from!", 1)
+					} else if remoteDir == "" {
+						return metacli.Exit("Good job! Now tell it where to put it to!", 1)
+					}
+
+					onConflict := cli.ConflictResolutionPolicy(cmd.String("conflict"))
+					prune := cmd.Bool("prune")
+
+					//	todo: dedup
+					if onConflict == cli.ResolveAsVersions && prune {
+						return metacli.Exit("How the fuck do you expect it to keep more than one version while also prunnig everything that's not on the remote?????????????", 1)
+					}
+
+					if err := cli.Push(
+						ctx,
+						&client,
+						localDir,
+						remoteDir,
+						onConflict,
+						prune,
+					); err != nil {
+						//	todo: handle
+						return metacli.Exit("Push aborted", 1)
 					}
 
 					return nil

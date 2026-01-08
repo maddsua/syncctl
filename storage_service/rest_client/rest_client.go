@@ -55,7 +55,8 @@ func (client *RestClient) Put(ctx context.Context, entry *s4.FileUpload, overwri
 		return nil, err
 	}
 
-	req.Header.Set("Content-Length", fmt.Sprintf("%d", entry.Size))
+	//	todo: fix header name
+	req.Header.Set("X-Content-Length", strconv.FormatInt(entry.Size, 10))
 	req.Header.Set("Date", entry.Modified.Format(time.RFC1123))
 
 	if entry.SHA256 != "" {
