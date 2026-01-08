@@ -209,17 +209,26 @@ func (storage *Storage) List(ctx context.Context, prefix string, recursive bool,
 	storage.lock.Lock()
 	defer storage.lock.Unlock()
 
-	dir := path.Join(storage.RootDir, prefix)
+	dirname := path.Dir(path.Join(storage.RootDir, prefix))
 
-	stat, _ := os.Stat(dir)
+	stat, _ := os.Stat(dirname)
 	if stat == nil || !stat.IsDir() {
 		return nil, nil
+	}
+
+	var filterPrefix string
+	if prefix != "" {
+		filterPrefix = path.Join(storage.RootDir, prefix)
 	}
 
 	results := make([]s4.FileMetadata, 0)
 	var pageIdx int
 
 	var onFile = func(name string) (bool, error) {
+
+		if filterPrefix != "" && !strings.HasPrefix(name, filterPrefix) {
+			return true, nil
+		}
 
 		pageIdx++
 
@@ -250,7 +259,7 @@ func (storage *Storage) List(ctx context.Context, prefix string, recursive bool,
 		return true, nil
 	}
 
-	if err := WalkDir(dir, recursive, onFile); err != nil {
+	if err := WalkDir(dirname, recursive, onFile); err != nil {
 		return nil, err
 	}
 
