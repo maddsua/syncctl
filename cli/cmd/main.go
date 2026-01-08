@@ -72,13 +72,20 @@ func main() {
 						return metacli.Exit("Good job! Now tell it where to put it to!", 1)
 					}
 
+					onConflict := cli.ConflictResolutionPolicy(cmd.String("conflict"))
+					prune := cmd.Bool("prune")
+
+					if onConflict == cli.ResolveAsVersions && prune {
+						return metacli.Exit("How the fuck do you expect it to keep more than one version while also prunnig everything that's not on the remote?????????????", 1)
+					}
+
 					return cli.Pull(
 						ctx,
 						&client,
 						remoteDir,
 						localDir,
-						cli.ConflictResolutionPolicy(cmd.String("conflict")),
-						cmd.Bool("prune"),
+						onConflict,
+						prune,
 					)
 				},
 			},

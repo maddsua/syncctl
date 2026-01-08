@@ -18,8 +18,8 @@ import (
 
 func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir string, onconflict ConflictResolutionPolicy, prune bool) error {
 
-	if onconflict == ResolveAsVersions && prune {
-		return fmt.Errorf("can't use both file versioning and prunning at the same time! wtf?!")
+	if onconflict == ResolveAsVersions {
+		prune = false
 	}
 
 	var pruneMap map[string]struct{}
