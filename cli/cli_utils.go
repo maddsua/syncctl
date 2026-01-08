@@ -2,10 +2,11 @@ package cli
 
 import (
 	"fmt"
-	"math"
 	"slices"
 	"strings"
 )
+
+//	todo: mv
 
 type ConflictResolutionPolicy string
 
@@ -39,14 +40,4 @@ func (e *EnumValue) Set(value string) error {
 
 func (e *EnumValue) String() string {
 	return e.Value
-}
-
-func DataSizeString(bf float64) string {
-	for _, unit := range []string{"", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi"} {
-		if math.Abs(bf) < 1024.0 {
-			return fmt.Sprintf("%3.1f%sB", bf, unit)
-		}
-		bf /= 1024.0
-	}
-	return fmt.Sprintf("%.1fYiB", bf)
 }

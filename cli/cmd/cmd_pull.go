@@ -1,4 +1,4 @@
-package cli
+package main
 
 import (
 	"context"
@@ -10,14 +10,15 @@ import (
 	"path"
 	"strings"
 
+	"github.com/maddsua/syncctl/cli"
 	s4 "github.com/maddsua/syncctl/storage_service"
+	"github.com/maddsua/syncctl/utils"
+	metacli "github.com/urfave/cli/v3"
 )
 
-//	todo: fix error handling
+func pullCmd(ctx context.Context, client s4.StorageClient, remoteDir, localDir string, onconflict cli.ConflictResolutionPolicy, prune bool) error {
 
-func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir string, onconflict ConflictResolutionPolicy, prune bool) error {
-
-	if onconflict == ResolveAsVersions {
+	if onconflict == cli.ResolveAsVersions {
 		prune = false
 	}
 
@@ -27,9 +28,9 @@ func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir stri
 
 		fmt.Println("Indexing local files...")
 
-		entries, err := ListAllRegularFiles(localDir)
+		entries, err := utils.ListAllRegularFiles(localDir)
 		if err != nil {
-			return err
+			return metacli.Exit(fmt.Sprintf("Unable to list local files: %v", err), 1)
 		}
 
 		for _, entry := range entries {
@@ -41,7 +42,7 @@ func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir stri
 
 	remoteFiles, err := client.List(ctx, remoteDir, true, 0, 0)
 	if err != nil {
-		return err
+		return metacli.Exit(fmt.Sprintf("Unable to fetch remote index: %v", err), 1)
 	} else if len(remoteFiles) == 0 {
 		fmt.Println("No files on the remote. Exiting.")
 		return nil
@@ -54,7 +55,7 @@ func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir stri
 		if err := pullEntry(ctx, client, localPath, onconflict, &entry); err != nil {
 			fmt.Fprintf(os.Stderr, "--X Error pulling '%s':\n", entry.Name)
 			fmt.Fprintf(os.Stderr, "    %v\n", err)
-			return err
+			return metacli.Exit("Pull aborted", 1)
 		}
 
 		delete(pruneMap, localPath)
@@ -63,7 +64,7 @@ func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir stri
 	if prune {
 		for name := range pruneMap {
 			if err := os.Remove(name); err != nil {
-				return err
+				return metacli.Exit(fmt.Sprintf("Unable to prune '%s': %v", name, err), 1)
 			}
 			fmt.Println("--> Prune", name)
 		}
@@ -74,22 +75,18 @@ func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir stri
 	return nil
 }
 
-func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, onconflict ConflictResolutionPolicy, entry *s4.FileMetadata) error {
+func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, onconflict cli.ConflictResolutionPolicy, entry *s4.FileMetadata) error {
 
-	if stat, err := os.Stat(localPath); err != nil {
-		return err
-	} else if stat == nil {
-		fmt.Printf("--> Downloading '%s' (%s)\n", localPath, DataSizeString(float64(entry.Size)))
-	} else {
+	if stat, _ := os.Stat(localPath); stat != nil {
 
-		hash, err := NamedFileHashSha256(localPath)
+		hash, err := utils.NamedFileHashSha256(localPath)
 		if err != nil {
 			return err
 		}
 
 		switch onconflict {
 
-		case ResolveOverwrite:
+		case cli.ResolveOverwrite:
 
 			if hash == entry.SHA256 {
 
@@ -105,35 +102,37 @@ func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, o
 				return nil
 			}
 
-			fmt.Printf("--> Updating '%s' (%s)\n", localPath, DataSizeString(float64(entry.Size)))
+			fmt.Printf("--> Updating '%s' (%s)\n", localPath, utils.DataSizeString(float64(entry.Size)))
 
-		case ResolveAsVersions:
+		case cli.ResolveAsVersions:
 
 			if hash == entry.SHA256 {
 				fmt.Printf("--> Up to date '%s'\n", localPath)
 				return nil
 			}
 
-			idx, err := HighestFileIndex(localPath)
+			ver, err := utils.HighestFileVersion(localPath)
 			if err != nil {
 				return err
 			}
 
-			if hash, err := NamedFileHashSha256(WithFileIdx(localPath, idx)); err != nil {
-				localPath = WithFileIdx(localPath, idx)
-				fmt.Printf("--> Updating version %d of '%s'\n", idx, localPath)
+			if hash, err := utils.NamedFileHashSha256(utils.WithFileVersion(localPath, ver)); err != nil {
+				localPath = utils.WithFileVersion(localPath, ver)
+				fmt.Printf("--> Updating version %d of '%s'\n", ver, localPath)
 			} else if hash != entry.SHA256 {
-				fmt.Printf("--> Adding version %d to '%s'\n", idx+1, localPath)
-				localPath = WithFileIdx(localPath, idx+1)
+				fmt.Printf("--> Adding version %d to '%s'\n", ver+1, localPath)
+				localPath = utils.WithFileVersion(localPath, ver+1)
 			} else {
 				fmt.Printf("--> Up to date '%s'\n", localPath)
 				return nil
 			}
 
 		default:
-			fmt.Printf("--> Skipping '%s'\n", localPath)
 			return nil
 		}
+
+	} else {
+		fmt.Printf("--> Downloading '%s' (%s)\n", localPath, utils.DataSizeString(float64(entry.Size)))
 	}
 
 	blob, err := client.Download(ctx, entry.Name)
@@ -150,7 +149,7 @@ func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, o
 
 	//	todo: add a progress bar
 
-	tmpFile, err := WriteTempFile(localDirName, tempBaseName, io.TeeReader(blob.ReadCloser, hasher))
+	tmpFile, err := utils.WriteTempFile(localDirName, tempBaseName, io.TeeReader(blob.ReadCloser, hasher))
 	if err != nil {
 		return err
 	}

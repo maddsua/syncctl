@@ -16,7 +16,6 @@ import (
 func NewHandler(storage s4.Storage) s4.SyncHandler {
 
 	//	todo: handle auth
-	//	todo: add event logging
 
 	var wg sync.WaitGroup
 	var mux http.ServeMux
@@ -50,10 +49,18 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 			meta.SHA256 = val
 		}
 
-		genericResponse(storage.Put(req.Context(), &s4.FileUpload{
+		result, err := storage.Put(req.Context(), &s4.FileUpload{
 			FileMetadata: meta,
 			Reader:       req.Body,
-		}, strings.EqualFold(req.URL.Query().Get("overwrite"), "true"))).WriteJSON(wrt)
+		}, strings.EqualFold(req.URL.Query().Get("overwrite"), "true"))
+
+		if err != nil {
+			slog.Error("Storage: Store file",
+				slog.String("name", meta.Name),
+				slog.String("err", err.Error()))
+		}
+
+		writeGeneirc(wrt, result, err)
 	})
 
 	mux.HandleFunc("GET /download", func(wrt http.ResponseWriter, req *http.Request) {
@@ -63,7 +70,10 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 
 		file, err := storage.Get(req.Context(), req.URL.Query().Get("name"))
 		if err != nil {
-			errorResponse(err).WriteJSON(wrt)
+			slog.Error("Storage: Read file",
+				slog.String("name", file.Name),
+				slog.String("err", err.Error()))
+			writeError(wrt, err)
 			return
 		}
 
@@ -71,7 +81,7 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 
 		cringe := contentRange{}
 		if err := cringe.ParseWith(req.Header.Get("Range"), file.Size); err != nil {
-			NewErrorResponseWithCode(err.Error(), http.StatusRequestedRangeNotSatisfiable).WriteJSON(wrt)
+			writeErrorWithCode(wrt, err, http.StatusRequestedRangeNotSatisfiable)
 			return
 		}
 
@@ -95,7 +105,11 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 
 		if cringe.Valid && cringe.Start > 0 {
 			if _, err := file.ReadSeekCloser.Seek(cringe.Start, io.SeekStart); err != nil {
-				NewErrorResponseWithCode(err.Error(), http.StatusInternalServerError).WriteJSON(wrt)
+				slog.Error("Storage: Serve file",
+					slog.String("name", file.Name),
+					slog.String("err", err.Error()))
+				writeError(wrt, err)
+				return
 			}
 		}
 
@@ -105,7 +119,7 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 		}
 
 		if _, err := io.Copy(wrt, bodyReader); err != nil {
-			slog.Error("Serve file",
+			slog.Error("Storage: Serve file",
 				slog.String("name", file.Name),
 				slog.String("err", err.Error()))
 			return
@@ -117,40 +131,83 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 	})
 
 	mux.HandleFunc("GET /stat", func(wrt http.ResponseWriter, req *http.Request) {
-		genericResponse(storage.Stat(req.Context(), req.URL.Query().Get("name"))).WriteJSON(wrt)
+
+		name := req.URL.Query().Get("name")
+
+		result, err := storage.Stat(req.Context(), name)
+		if err != nil {
+			slog.Error("Storage: State",
+				slog.String("name", name),
+				slog.String("err", err.Error()))
+		}
+
+		writeGeneirc(wrt, result, err)
 	})
 
 	mux.HandleFunc("GET /list", func(wrt http.ResponseWriter, req *http.Request) {
 
+		prefix := req.URL.Query().Get("prefix")
 		limit, _ := strconv.Atoi(req.URL.Query().Get("limit"))
 		offset, _ := strconv.Atoi(req.URL.Query().Get("offset"))
 
 		wg.Add(1)
 		defer wg.Done()
 
-		genericResponse(storage.List(
+		result, err := storage.List(
 			req.Context(),
-			req.URL.Query().Get("prefix"),
+			prefix,
 			strings.EqualFold(req.URL.Query().Get("recursive"), "true"),
 			offset,
 			limit,
-		)).WriteJSON(wrt)
+		)
+
+		if err != nil {
+			slog.Error("Storage: List entries",
+				slog.String("prefix", prefix),
+				slog.String("err", err.Error()))
+		}
+
+		writeGeneirc(wrt, result, err)
 	})
 
 	mux.HandleFunc("POST /move", func(wrt http.ResponseWriter, req *http.Request) {
-		genericResponse(storage.Move(
+
+		name := req.URL.Query().Get("name")
+		newName := req.URL.Query().Get("new_name")
+
+		result, err := storage.Move(
 			req.Context(),
-			req.URL.Query().Get("name"),
-			req.URL.Query().Get("new_name"),
+			name,
+			newName,
 			strings.EqualFold(req.URL.Query().Get("overwrite"), "true"),
-		)).WriteJSON(wrt)
+		)
+
+		if err != nil {
+			slog.Error("Storage: Move file",
+				slog.String("name", name),
+				slog.String("new_name", newName),
+				slog.String("err", err.Error()))
+		}
+
+		writeGeneirc(wrt, result, err)
 	})
 
 	mux.HandleFunc("DELETE /delete", func(wrt http.ResponseWriter, req *http.Request) {
-		genericResponse(storage.Delete(
+
+		name := req.URL.Query().Get("name")
+
+		result, err := storage.Delete(
 			req.Context(),
-			req.URL.Query().Get("name"),
-		)).WriteJSON(wrt)
+			name,
+		)
+
+		if err != nil {
+			slog.Error("Storage: Delete file",
+				slog.String("name", name),
+				slog.String("err", err.Error()))
+		}
+
+		writeGeneirc(wrt, result, err)
 	})
 
 	return &fsHandler{

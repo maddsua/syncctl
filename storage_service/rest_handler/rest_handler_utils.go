@@ -1,6 +1,7 @@
 package rest_handler
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -75,47 +76,53 @@ func (cr *contentRange) ParseWith(val string, totalSize int64) error {
 	return nil
 }
 
-func errorCode(err error) int {
+func writeGeneirc[T any](wrt http.ResponseWriter, val T, err error) error {
+	if err != nil {
+		return writeError(wrt, err)
+	}
+	return writeData(wrt, val)
+}
 
+func writeData[T any](wrt http.ResponseWriter, val T) error {
+	return writeResponse(wrt, s4.APIResponse[T]{Data: val})
+}
+
+func writeError(wrt http.ResponseWriter, err error) error {
 	switch err.(type) {
 	case *s4.FileNotFoundError:
-		return http.StatusNotFound
+		return writeErrorWithCode(wrt, err, http.StatusNotFound)
 	case *s4.FileConflictError:
-		return http.StatusConflict
+		return writeErrorWithCode(wrt, err, http.StatusConflict)
 	case *s4.NameError:
-		return http.StatusBadRequest
+		return writeErrorWithCode(wrt, err, http.StatusBadRequest)
 	default:
-		return http.StatusInternalServerError
+		return writeErrorWithCode(wrt, err, http.StatusInternalServerError)
 	}
 }
 
-func genericResponse[T any](val T, err error) *s4.APIResponse[T] {
-
-	if err != nil {
-		return &s4.APIResponse[T]{
-			Error: &s4.APIError{
-				Message:  err.Error(),
-				WithCode: errorCode(err),
-			},
-		}
-	}
-	return &s4.APIResponse[T]{Data: val}
-}
-
-func errorResponse(err error) *s4.APIResponse[any] {
-	return &s4.APIResponse[any]{
+func writeErrorWithCode(wrt http.ResponseWriter, err error, code int) error {
+	return writeResponse(wrt, s4.APIResponse[any]{
 		Error: &s4.APIError{
 			Message:  err.Error(),
-			WithCode: errorCode(err),
-		},
-	}
-}
-
-func NewErrorResponseWithCode(message string, code int) *s4.APIResponse[any] {
-	return &s4.APIResponse[any]{
-		Error: &s4.APIError{
-			Message:  message,
 			WithCode: code,
 		},
+	})
+}
+
+func writeResponse[T any](wrt http.ResponseWriter, resp s4.APIResponse[T]) error {
+
+	wrt.Header().Set("Content-Type", "application/json")
+
+	if resp.Error != nil {
+		if resp.Error.WithCode >= http.StatusBadRequest {
+			wrt.WriteHeader(resp.Error.WithCode)
+		} else {
+			wrt.WriteHeader(http.StatusBadRequest)
+		}
 	}
+
+	enc := json.NewEncoder(wrt)
+	enc.SetIndent("", "  ")
+
+	return enc.Encode(resp)
 }

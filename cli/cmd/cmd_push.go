@@ -1,4 +1,4 @@
-package cli
+package main
 
 import (
 	"context"
@@ -7,14 +7,15 @@ import (
 	"path"
 	"strings"
 
+	"github.com/maddsua/syncctl/cli"
 	s4 "github.com/maddsua/syncctl/storage_service"
+	"github.com/maddsua/syncctl/utils"
+	metacli "github.com/urfave/cli/v3"
 )
 
-//	todo: fix error handling
+func pushCmd(ctx context.Context, client s4.StorageClient, localDir, remoteDir string, onconflict cli.ConflictResolutionPolicy, prune bool) error {
 
-func Push(ctx context.Context, client s4.StorageClient, localDir, remoteDir string, onconflict ConflictResolutionPolicy, prune bool) error {
-
-	if onconflict == ResolveAsVersions {
+	if onconflict == cli.ResolveAsVersions {
 		prune = false
 	}
 
@@ -23,7 +24,7 @@ func Push(ctx context.Context, client s4.StorageClient, localDir, remoteDir stri
 	remoteIndex := map[string]*s4.FileMetadata{}
 
 	if entries, err := client.List(ctx, remoteDir, true, 0, 0); err != nil {
-		return err
+		return metacli.Exit(fmt.Sprintf("Unable to fetch remote index: %v", err), 1)
 	} else if len(entries) > 0 {
 		for _, entry := range entries {
 			remoteIndex[entry.Name] = &entry
@@ -32,9 +33,9 @@ func Push(ctx context.Context, client s4.StorageClient, localDir, remoteDir stri
 
 	fmt.Println("Indexing local files...")
 
-	entries, err := ListAllRegularFiles(localDir)
+	entries, err := utils.ListAllRegularFiles(localDir)
 	if err != nil {
-		return err
+		return metacli.Exit(fmt.Sprintf("Unable to list local files: %v", err), 1)
 	}
 
 	for _, name := range entries {
@@ -44,7 +45,7 @@ func Push(ctx context.Context, client s4.StorageClient, localDir, remoteDir stri
 		if err := pushEntry(ctx, client, name, remotePath, remoteIndex[remotePath], onconflict); err != nil {
 			fmt.Fprintf(os.Stderr, "--X Error pushing '%s':\n", name)
 			fmt.Fprintf(os.Stderr, "    %v\n", err)
-			return err
+			return metacli.Exit("Push aborted", 1)
 		}
 
 		delete(remoteIndex, remotePath)
@@ -53,7 +54,7 @@ func Push(ctx context.Context, client s4.StorageClient, localDir, remoteDir stri
 	if prune {
 		for key := range remoteIndex {
 			if _, err := client.Delete(ctx, key); err != nil {
-				return err
+				return metacli.Exit(fmt.Sprintf("Unable to prune '%s': %v", key, err), 1)
 			}
 			fmt.Println("--> Prune", key)
 		}
@@ -64,7 +65,7 @@ func Push(ctx context.Context, client s4.StorageClient, localDir, remoteDir stri
 	return nil
 }
 
-func pushEntry(ctx context.Context, client s4.StorageClient, name, remotePath string, remoteEntry *s4.FileMetadata, onconflict ConflictResolutionPolicy) error {
+func pushEntry(ctx context.Context, client s4.StorageClient, name, remotePath string, remoteEntry *s4.FileMetadata, onconflict cli.ConflictResolutionPolicy) error {
 
 	stat, err := os.Stat(name)
 	if err != nil {
@@ -77,7 +78,7 @@ func pushEntry(ctx context.Context, client s4.StorageClient, name, remotePath st
 	}
 	defer file.Close()
 
-	hash, err := FileHashSha256(file)
+	hash, err := utils.FileHashSha256(file)
 	if err != nil {
 		return err
 	}
@@ -86,26 +87,25 @@ func pushEntry(ctx context.Context, client s4.StorageClient, name, remotePath st
 
 		switch onconflict {
 
-		case ResolveOverwrite:
+		case cli.ResolveOverwrite:
 
 			if remoteEntry.SHA256 == hash && remoteEntry.Modified.Equal(stat.ModTime()) {
 				fmt.Printf("--> Up to date '%s'\n", remotePath)
 				return nil
 			}
 
-			fmt.Printf("--> Updating '%s' (%s)\n", remotePath, DataSizeString(float64(stat.Size())))
+			fmt.Printf("--> Updating '%s' (%s)\n", remotePath, utils.DataSizeString(float64(stat.Size())))
 
-		case ResolveAsVersions:
+		case cli.ResolveAsVersions:
 
 			//	todo: check naming and shit
 			return fmt.Errorf("'ResolveAsVersions' not implemented yet")
 
 		default:
-			fmt.Printf("--> Skipping '%s'\n", remotePath)
 			return nil
 		}
 	} else {
-		fmt.Printf("--> Uploading '%s' (%s)\n", remotePath, DataSizeString(float64(stat.Size())))
+		fmt.Printf("--> Uploading '%s' (%s)\n", remotePath, utils.DataSizeString(float64(stat.Size())))
 	}
 
 	//	todo: add a progress bar

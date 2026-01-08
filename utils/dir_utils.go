@@ -1,4 +1,4 @@
-package cli
+package utils
 
 import (
 	"fmt"
@@ -51,7 +51,7 @@ func ListAllRegularFiles(name string) ([]string, error) {
 	return result, nil
 }
 
-func WithFileIdx(name string, idx int) string {
+func WithFileVersion(name string, idx int) string {
 
 	ext := path.Ext(name)
 	name = strings.TrimSuffix(name, ext)
@@ -59,7 +59,7 @@ func WithFileIdx(name string, idx int) string {
 	return name + "-" + strconv.Itoa(idx) + ext
 }
 
-func HighestFileIndex(name string) (int, error) {
+func HighestFileVersion(name string) (int, error) {
 
 	entries, err := os.ReadDir(path.Dir(name))
 	if err != nil {

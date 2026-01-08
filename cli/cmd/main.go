@@ -21,8 +21,6 @@ import (
 
 */
 
-//	todo: push command
-
 //	todo: auth command
 
 //	todo: config commands
@@ -74,24 +72,11 @@ func main() {
 					onConflict := cli.ConflictResolutionPolicy(cmd.String("conflict"))
 					prune := cmd.Bool("prune")
 
-					//	todo: dedup
-					if onConflict == cli.ResolveAsVersions && prune {
-						return metacli.Exit("How the fuck do you expect it to keep more than one version while also prunnig everything that's not on the remote?????????????", 1)
+					if err := isConflictResolutionConflict(onConflict, prune); err != nil {
+						return err
 					}
 
-					if err := cli.Pull(
-						ctx,
-						&client,
-						remoteDir,
-						localDir,
-						onConflict,
-						prune,
-					); err != nil {
-						//	todo: handle
-						return metacli.Exit("Pull aborted", 1)
-					}
-
-					return nil
+					return pullCmd(ctx, &client, remoteDir, localDir, onConflict, prune)
 				},
 			},
 			{
@@ -132,24 +117,11 @@ func main() {
 					onConflict := cli.ConflictResolutionPolicy(cmd.String("conflict"))
 					prune := cmd.Bool("prune")
 
-					//	todo: dedup
-					if onConflict == cli.ResolveAsVersions && prune {
-						return metacli.Exit("How the fuck do you expect it to keep more than one version while also prunnig everything that's not on the remote?????????????", 1)
+					if err := isConflictResolutionConflict(onConflict, prune); err != nil {
+						return err
 					}
 
-					if err := cli.Push(
-						ctx,
-						&client,
-						localDir,
-						remoteDir,
-						onConflict,
-						prune,
-					); err != nil {
-						//	todo: handle
-						return metacli.Exit("Push aborted", 1)
-					}
-
-					return nil
+					return pushCmd(ctx, &client, localDir, remoteDir, onConflict, prune)
 				},
 			},
 		},
@@ -159,4 +131,11 @@ func main() {
 		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
 	}
+}
+
+func isConflictResolutionConflict(onConflict cli.ConflictResolutionPolicy, prune bool) error {
+	if onConflict == cli.ResolveAsVersions && prune {
+		return metacli.Exit("How the fuck do you expect it to keep more than one version while also prunnig everything that's not on the remote?????????????", 1)
+	}
+	return nil
 }
