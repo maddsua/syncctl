@@ -17,9 +17,10 @@ func GetConfigLocation() (string, error) {
 }
 
 type Config struct {
-	Remote  RemoteConfig `json:"remote"`
-	Valid   bool         `json:"-"`
-	Changed bool         `json:"-"`
+	Remote   RemoteConfig `json:"remote"`
+	Valid    bool         `json:"-"`
+	Changed  bool         `json:"-"`
+	Location string       `json:"-"`
 }
 
 func (config *Config) Store() error {
@@ -67,6 +68,7 @@ func (config *Config) Load() error {
 	}
 
 	config.Valid = true
+	config.Location = loc
 
 	return nil
 }

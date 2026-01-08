@@ -54,15 +54,14 @@ func main() {
 
 	select {
 	case <-exitCh:
-		break
+		slog.Info("Note: Exiting...")
+		_ = srv.Close()
+		fshandler.Wait()
 	case err := <-errCh:
 		if err != nil {
 			slog.Error("SERVER Terminated",
 				slog.String("err", err.Error()))
+			os.Exit(1)
 		}
 	}
-
-	_ = srv.Close()
-
-	fshandler.Wait()
 }

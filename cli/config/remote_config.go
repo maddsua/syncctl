@@ -8,8 +8,8 @@ import (
 )
 
 type RemoteConfig struct {
-	URL string `json:"url"`
-	RemoteCredentials
+	URL  string             `json:"url"`
+	Auth *RemoteCredentials `json:"auth"`
 }
 
 type RemoteCredentials struct {

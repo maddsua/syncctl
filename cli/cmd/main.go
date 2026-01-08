@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"os/signal"
 	"strings"
-
-	//"github.com/maddsua/syncctl/storage_service/rest_client"
+	"syscall"
 
 	"github.com/maddsua/syncctl"
 	cliutils "github.com/maddsua/syncctl/cli/cli_utils"
@@ -15,14 +15,6 @@ import (
 	"github.com/maddsua/syncctl/storage_service/rest_client"
 	"github.com/urfave/cli/v3"
 )
-
-/*
-	Some cmd examples for sleepy joe:
-
-	pull some shit:
-	go run ./cli/cmd pull /docs data/client/docs
-
-*/
 
 func main() {
 
@@ -71,7 +63,6 @@ func main() {
 						return err
 					}
 
-					//	todo: support setting these from global-ish config
 					remoteDir := cmd.StringArg("remote_dir")
 					localDir := cmd.StringArg("local_dir")
 
@@ -120,7 +111,6 @@ func main() {
 						return err
 					}
 
-					//	todo: support setting these from global-ish config
 					localDir := cmd.StringArg("local_dir")
 					remoteDir := cmd.StringArg("remote_dir")
 
@@ -160,7 +150,7 @@ func main() {
 
 									urlArg := cmd.StringArg("url")
 									if urlArg == "" {
-										return cli.Exit("url must not be empty", 1)
+										return cli.Exit("Forgot to set the URL itself huh?", 1)
 									}
 
 									url, creds, err := config.ParseRemoteUrl(urlArg)
@@ -176,9 +166,9 @@ func main() {
 
 										if creds != nil {
 											fmt.Println("Setting remote user:", creds.Username)
-											cfg.Remote.RemoteCredentials = *creds
+											cfg.Remote.Auth = creds
 										} else {
-											cfg.Remote.RemoteCredentials = config.RemoteCredentials{}
+											cfg.Remote.Auth = nil
 											fmt.Println("Note: Don't forget to update your credentials")
 										}
 
@@ -200,7 +190,7 @@ func main() {
 
 									credsArg := cmd.StringArg("credentials")
 									if credsArg == "" {
-										return cli.Exit("credentials string must not be empty", 1)
+										return cli.Exit("Forgot to set the credentials string itself huh?", 1)
 									}
 
 									newVal, err := config.ParseRemoteCredentials(credsArg)
@@ -210,8 +200,8 @@ func main() {
 
 									fmt.Println("Setting remote credentials")
 
-									if !cfg.Remote.RemoteCredentials.Equal(newVal) {
-										cfg.Remote.RemoteCredentials = *newVal
+									if cfg.Remote.Auth == nil || !cfg.Remote.Auth.Equal(newVal) {
+										cfg.Remote.Auth = newVal
 										cfg.Changed = true
 									}
 
@@ -222,22 +212,65 @@ func main() {
 					},
 				},
 			},
+			{
+				Name:  "config",
+				Usage: "Shows current config",
+				Action: func(ctx context.Context, _ *cli.Command) error {
+
+					if !cfg.Valid {
+						fmt.Println("[No config]")
+						return nil
+					}
+
+					fmt.Println("> Location:", cfg.Location)
+					fmt.Println("> Remote:", cfg.Remote.URL)
+
+					if cfg.Remote.Auth != nil {
+						fmt.Println("> User:", cfg.Remote.Auth.Username)
+					}
+
+					return nil
+				},
+			},
 		},
 	}
 
-	//	todo: handle interrupts
+	errCh := make(chan error, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	if err := cmd.Run(context.Background(), os.Args); err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		os.Exit(1)
-	}
+	go func() {
+		if err := cmd.Run(ctx, os.Args); ctx.Err() == nil {
+			errCh <- err
+		} else {
+			errCh <- nil
+		}
+	}()
 
-	if cfg.Changed {
-		if err := cfg.Store(); err != nil {
-			fmt.Println("Store config:", err)
+	exitCh := make(chan os.Signal, 2)
+	signal.Notify(exitCh, os.Interrupt, syscall.SIGTERM)
+
+	select {
+
+	case err := <-errCh:
+
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err.Error())
 			os.Exit(1)
 		}
-		fmt.Println("Note: Config changed")
+
+		if cfg.Changed {
+			if err := cfg.Store(); err != nil {
+				fmt.Println("Store config:", err)
+				os.Exit(1)
+			}
+			fmt.Println("Note: Config changed")
+		}
+
+	case <-exitCh:
+		fmt.Println("Cancelling...")
+		cancel()
+		<-errCh
 	}
 }
 
@@ -252,7 +285,7 @@ func isRemoteConfigured(cfg *config.Config) error {
 
 	if !cfg.Valid || cfg.Remote.URL == "" {
 		return cli.Exit("Remote not configured. Use 'set remote url' command to set it", 1)
-	} else if cfg.Remote.RemoteCredentials.Username == "" {
+	} else if cfg.Remote.Auth == nil || cfg.Remote.Auth.Username == "" {
 		return cli.Exit("Remote auth not configured. Use 'set remote auth' command to set it", 1)
 	}
 
@@ -261,7 +294,7 @@ func isRemoteConfigured(cfg *config.Config) error {
 
 func instantiateClient(cfg *config.Config) *rest_client.RestClient {
 
-	if cfg.Remote.RemoteCredentials.Username == "" {
+	if cfg.Remote.Auth == nil {
 		return &rest_client.RestClient{
 			RemoteURL: cfg.Remote.URL,
 		}
@@ -269,6 +302,6 @@ func instantiateClient(cfg *config.Config) *rest_client.RestClient {
 
 	return &rest_client.RestClient{
 		RemoteURL: cfg.Remote.URL,
-		Auth:      url.UserPassword(cfg.Remote.Username, cfg.Remote.Password),
+		Auth:      url.UserPassword(cfg.Remote.Auth.Username, cfg.Remote.Auth.Password),
 	}
 }
