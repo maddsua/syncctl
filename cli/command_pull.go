@@ -13,9 +13,10 @@ import (
 	s4 "github.com/maddsua/syncctl/storage_service"
 )
 
+//	todo: wrap all of this into a proper command
 //	todo: color the output. maybe with: https://github.com/charmbracelet/lipgloss
 
-func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir string, onconflict FileConflicResolution, prune bool) error {
+func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir string, onconflict ConflictResolutionPolicy, prune bool) error {
 
 	if onconflict == ResolveAsVersions && prune {
 		return fmt.Errorf("can't use both file versioning and prunning at the same time! wtf?!")
@@ -73,7 +74,7 @@ func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir stri
 	return nil
 }
 
-func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, onconflict FileConflicResolution, entry *s4.FileMetadata) error {
+func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, onconflict ConflictResolutionPolicy, entry *s4.FileMetadata) error {
 
 	if stat, err := FileContentStat(localPath); err != nil {
 		return err

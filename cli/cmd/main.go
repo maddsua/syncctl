@@ -4,107 +4,89 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
+
+	//"github.com/maddsua/syncctl/storage_service/rest_client"
 
 	"github.com/maddsua/syncctl/cli"
 	"github.com/maddsua/syncctl/storage_service/rest_client"
+	metacli "github.com/urfave/cli/v3"
 )
+
+/*
+	Some cmd examples for sleepy joe:
+
+	pull some shit:
+	go run ./cli/cmd pull /docs data/client/docs
+
+*/
+
+//	todo: push command
+
+//	todo: auth command
+
+//	todo: config commands
 
 func main() {
 
+	//	todo: manage this as well
 	client := rest_client.RestClient{
 		RemoteURL: "http://localhost:2000/",
 	}
 
-	if err := cli.Pull(context.Background(), &client, "/docs", "data/client/docs", cli.ResolveOverwrite, true); err != nil {
-		fmt.Println("ERR", err)
-		os.Exit(1)
-	}
+	cmd := &metacli.Command{
+		Commands: []*metacli.Command{
+			{
 
-	/* entries, err := client.List(context.Background(), "", true, 0, 0)
-	if err != nil {
-		fmt.Println("ERR", err)
-		os.Exit(1)
-	}
+				Name:  "pull",
+				Usage: "Pulls your stupid files from the remote",
+				Arguments: []metacli.Argument{
+					&metacli.StringArg{
+						Name: "remote_dir",
+					},
+					&metacli.StringArg{
+						Name: "local_dir",
+					},
+				},
+				Flags: []metacli.Flag{
+					&metacli.BoolFlag{
+						Name:  "prune",
+						Usage: "Whether or not to nuke all the files that aren't present on the remote",
+					},
+					&metacli.GenericFlag{
+						Name:  "conflict",
+						Value: cli.ConflictFlagValue,
+						Usage: fmt.Sprintf("What do when a file with the same name already exists [%s]",
+							strings.Join(cli.ConflictFlagValue.Options, "|")),
+					},
+				},
+				Action: func(ctx context.Context, cmd *metacli.Command) error {
 
-	for _, entry := range entries {
-		fmt.Println(">", entry)
-	} */
+					//	todo: support setting these from global-ish config
+					remoteDir := cmd.StringArg("remote_dir")
+					localDir := cmd.StringArg("local_dir")
 
-	/* file, err := client.Download(context.Background(), "/docs/message-to-mr-white.md")
-	if err != nil {
-		fmt.Println("ERR", err)
-		os.Exit(1)
-	}
+					if remoteDir == "" && localDir == "" {
+						return metacli.Exit("Yo! You forgot to tell the thing where to pull them files from!", 1)
+					} else if localDir == "" {
+						return metacli.Exit("Good job! Now tell it where to put it to!", 1)
+					}
 
-	fmt.Println("FILE", file)
-
-	defer file.Close()
-
-	hasher := sha256.New()
-
-	text, err := io.ReadAll(io.TeeReader(file, hasher))
-	if err != nil {
-		fmt.Println("ERR", err)
-		os.Exit(1)
-	}
-
-	fmt.Println("TEXT:", string(text))
-
-	hash := hex.EncodeToString(hasher.Sum(nil))
-
-	fmt.Println("HASH:", hash)
-
-	if hash != file.SHA256 {
-		fmt.Println("HASH DIDN'T MATCH")
-		os.Exit(2)
-	} */
-
-	/* broker := blobstorage.Storage{
-		RootDir: "data",
-	} */
-
-	/* file, err := broker.Put(&fsserver.FileUpload{
-		FileMetadata: fsserver.FileMetadata{
-			Name:     "/docs/readme.md",
-			Modified: time.Now(),
-			Size:     15,
+					return cli.Pull(
+						ctx,
+						&client,
+						remoteDir,
+						localDir,
+						cli.ConflictResolutionPolicy(cmd.String("conflict")),
+						cmd.Bool("prune"),
+					)
+				},
+			},
 		},
-		Reader: bytes.NewReader([]byte("yo sup mr white")),
-	}, true)
-
-	if err != nil {
-		fmt.Println("ERR", err)
-		os.Exit(1)
 	}
 
-	fmt.Println("FILE", file) */
-
-	/* 	page, err := broker.List("", true, 0, 0)
-
-	   	if err != nil {
-	   		fmt.Println("ERR", err)
-	   		os.Exit(1)
-	   	}
-
-	   	for _, entry := range page {
-	   		fmt.Println(">", entry)
-	   	} */
-
-	/* 	file, err := broker.Get("/docs/message-to-mr-white.md")
-	   	if err != nil {
-	   		fmt.Println("ERR", err)
-	   		os.Exit(1)
-	   	}
-
-	   	fmt.Println("FILE", file)
-
-	   	defer file.Close()
-	   	text, err := io.ReadAll(file)
-	   	if err != nil {
-	   		fmt.Println("ERR", err)
-	   		os.Exit(1)
-	   	}
-
-	   	fmt.Println("TEXT", string(text)) */
-
+	if err := cmd.Run(context.Background(), os.Args); err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
+		os.Exit(1)
+	}
 }
