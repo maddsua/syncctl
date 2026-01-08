@@ -51,7 +51,7 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 
 		result, err := storage.Put(req.Context(), &s4.FileUpload{
 			FileMetadata: meta,
-			Reader:       req.Body,
+			Reader:       io.LimitReader(req.Body, meta.Size),
 		}, strings.EqualFold(req.URL.Query().Get("overwrite"), "true"))
 
 		if err != nil {
@@ -113,7 +113,7 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 			}
 		}
 
-		var bodyReader io.Reader = file.ReadSeekCloser
+		bodyReader := io.LimitReader(file.ReadSeekCloser, file.Size)
 		if cringe.Valid && cringe.End > 0 {
 			bodyReader = io.LimitReader(file.ReadSeekCloser, cringe.Size())
 		}
