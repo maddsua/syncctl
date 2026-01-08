@@ -10,15 +10,15 @@ import (
 	"path"
 	"strings"
 
-	"github.com/maddsua/syncctl/cli"
+	"github.com/maddsua/syncctl"
 	s4 "github.com/maddsua/syncctl/storage_service"
 	"github.com/maddsua/syncctl/utils"
 	metacli "github.com/urfave/cli/v3"
 )
 
-func pullCmd(ctx context.Context, client s4.StorageClient, remoteDir, localDir string, onconflict cli.ConflictResolutionPolicy, prune bool) error {
+func pullCmd(ctx context.Context, client s4.StorageClient, remoteDir, localDir string, onconflict syncctl.ResolvePolicy, prune bool) error {
 
-	if onconflict == cli.ResolveAsVersions {
+	if onconflict == syncctl.ResolveAsVersions {
 		prune = false
 	}
 
@@ -75,7 +75,7 @@ func pullCmd(ctx context.Context, client s4.StorageClient, remoteDir, localDir s
 	return nil
 }
 
-func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, onconflict cli.ConflictResolutionPolicy, entry *s4.FileMetadata) error {
+func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, onconflict syncctl.ResolvePolicy, entry *s4.FileMetadata) error {
 
 	if stat, _ := os.Stat(localPath); stat != nil {
 
@@ -86,7 +86,7 @@ func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, o
 
 		switch onconflict {
 
-		case cli.ResolveOverwrite:
+		case syncctl.ResolveOverwrite:
 
 			if hash == entry.SHA256 {
 
@@ -104,7 +104,7 @@ func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, o
 
 			fmt.Printf("--> Updating '%s' (%s)\n", localPath, utils.DataSizeString(float64(entry.Size)))
 
-		case cli.ResolveAsVersions:
+		case syncctl.ResolveAsVersions:
 
 			if hash == entry.SHA256 {
 				fmt.Printf("--> Up to date '%s'\n", localPath)

@@ -8,7 +8,8 @@ import (
 
 	//"github.com/maddsua/syncctl/storage_service/rest_client"
 
-	"github.com/maddsua/syncctl/cli"
+	"github.com/maddsua/syncctl"
+	cliutils "github.com/maddsua/syncctl/cli/cli_utils"
 	"github.com/maddsua/syncctl/storage_service/rest_client"
 	metacli "github.com/urfave/cli/v3"
 )
@@ -32,6 +33,11 @@ func main() {
 		RemoteURL: "http://localhost:2000/",
 	}
 
+	var conflictFlagValue = &cliutils.EnumValue{
+		Options: []string{string(syncctl.ResolveSkip), string(syncctl.ResolveOverwrite), string(syncctl.ResolveAsVersions)},
+		Value:   string(syncctl.ResolveSkip),
+	}
+
 	cmd := &metacli.Command{
 		Commands: []*metacli.Command{
 			{
@@ -52,9 +58,9 @@ func main() {
 					},
 					&metacli.GenericFlag{
 						Name:  "conflict",
-						Value: cli.ConflictFlagValue,
+						Value: conflictFlagValue,
 						Usage: fmt.Sprintf("How to handle files that already exist locally? [%s]",
-							strings.Join(cli.ConflictFlagValue.Options, "|")),
+							strings.Join(conflictFlagValue.Options, "|")),
 					},
 				},
 				Action: func(ctx context.Context, cmd *metacli.Command) error {
@@ -69,7 +75,7 @@ func main() {
 						return metacli.Exit("Good job! Now tell it where to put it to!", 1)
 					}
 
-					onConflict := cli.ConflictResolutionPolicy(cmd.String("conflict"))
+					onConflict := syncctl.ResolvePolicy(cmd.String("conflict"))
 					prune := cmd.Bool("prune")
 
 					if err := isConflictResolutionConflict(onConflict, prune); err != nil {
@@ -97,9 +103,9 @@ func main() {
 					},
 					&metacli.GenericFlag{
 						Name:  "conflict",
-						Value: cli.ConflictFlagValue,
+						Value: conflictFlagValue,
 						Usage: fmt.Sprintf("How to handle files that already exist on the remote? [%s]",
-							strings.Join(cli.ConflictFlagValue.Options, "|")),
+							strings.Join(conflictFlagValue.Options, "|")),
 					},
 				},
 				Action: func(ctx context.Context, cmd *metacli.Command) error {
@@ -114,7 +120,7 @@ func main() {
 						return metacli.Exit("Good job! Now tell it where to put it to!", 1)
 					}
 
-					onConflict := cli.ConflictResolutionPolicy(cmd.String("conflict"))
+					onConflict := syncctl.ResolvePolicy(cmd.String("conflict"))
 					prune := cmd.Bool("prune")
 
 					if err := isConflictResolutionConflict(onConflict, prune); err != nil {
@@ -133,8 +139,8 @@ func main() {
 	}
 }
 
-func isConflictResolutionConflict(onConflict cli.ConflictResolutionPolicy, prune bool) error {
-	if onConflict == cli.ResolveAsVersions && prune {
+func isConflictResolutionConflict(onConflict syncctl.ResolvePolicy, prune bool) error {
+	if onConflict == syncctl.ResolveAsVersions && prune {
 		return metacli.Exit("How the fuck do you expect it to keep more than one version while also prunnig everything that's not on the remote?????????????", 1)
 	}
 	return nil

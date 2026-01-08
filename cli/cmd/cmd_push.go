@@ -7,15 +7,15 @@ import (
 	"path"
 	"strings"
 
-	"github.com/maddsua/syncctl/cli"
+	"github.com/maddsua/syncctl"
 	s4 "github.com/maddsua/syncctl/storage_service"
 	"github.com/maddsua/syncctl/utils"
 	metacli "github.com/urfave/cli/v3"
 )
 
-func pushCmd(ctx context.Context, client s4.StorageClient, localDir, remoteDir string, onconflict cli.ConflictResolutionPolicy, prune bool) error {
+func pushCmd(ctx context.Context, client s4.StorageClient, localDir, remoteDir string, onconflict syncctl.ResolvePolicy, prune bool) error {
 
-	if onconflict == cli.ResolveAsVersions {
+	if onconflict == syncctl.ResolveAsVersions {
 		prune = false
 	}
 
@@ -65,7 +65,7 @@ func pushCmd(ctx context.Context, client s4.StorageClient, localDir, remoteDir s
 	return nil
 }
 
-func pushEntry(ctx context.Context, client s4.StorageClient, name, remotePath string, remoteEntry *s4.FileMetadata, onconflict cli.ConflictResolutionPolicy) error {
+func pushEntry(ctx context.Context, client s4.StorageClient, name, remotePath string, remoteEntry *s4.FileMetadata, onconflict syncctl.ResolvePolicy) error {
 
 	stat, err := os.Stat(name)
 	if err != nil {
@@ -87,7 +87,7 @@ func pushEntry(ctx context.Context, client s4.StorageClient, name, remotePath st
 
 		switch onconflict {
 
-		case cli.ResolveOverwrite:
+		case syncctl.ResolveOverwrite:
 
 			if remoteEntry.SHA256 == hash && remoteEntry.Modified.Equal(stat.ModTime()) {
 				fmt.Printf("--> Up to date '%s'\n", remotePath)
@@ -96,7 +96,7 @@ func pushEntry(ctx context.Context, client s4.StorageClient, name, remotePath st
 
 			fmt.Printf("--> Updating '%s' (%s)\n", remotePath, utils.DataSizeString(float64(stat.Size())))
 
-		case cli.ResolveAsVersions:
+		case syncctl.ResolveAsVersions:
 
 			//	todo: check naming and shit
 			return fmt.Errorf("'ResolveAsVersions' not implemented yet")
