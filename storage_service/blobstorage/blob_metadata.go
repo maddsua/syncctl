@@ -9,7 +9,7 @@ import (
 )
 
 type BlobMetadata struct {
-	SHA256 string `json:"h"`
+	SHA256 string
 }
 
 func (meta *BlobMetadata) WriteTar(wrt *tar.Writer) error {
