@@ -56,15 +56,22 @@ func WalkDir(dir string, recursive bool, onFile func(name string) (wantMore bool
 }
 
 type Storage struct {
-	RootDir string
-	lock    sync.Mutex
+	RootDir    string
+	listLock   sync.Mutex
+	uploadLock sync.Map
 }
 
-func (storage *Storage) Put(_ context.Context, entry *s4.FileUpload, overwrite bool) (*s4.FileMetadata, error) {
+func (storage *Storage) Put(ctx context.Context, entry *s4.FileUpload, overwrite bool) (*s4.FileMetadata, error) {
 
 	if entry.Name = CleanRelativePath(entry.Name); entry.Name == "" {
 		return nil, &s4.NameError{Name: entry.Name}
 	}
+
+	if _, locked := storage.uploadLock.LoadOrStore(entry.Name, ctx); locked {
+		return nil, &s4.FileConflictError{Path: entry.Name}
+	}
+
+	defer storage.uploadLock.Delete(entry.Name)
 
 	blobPath := BlobPath(storage.RootDir, entry.Name)
 	if _, err := os.Stat(blobPath); err == nil && !overwrite {
@@ -153,8 +160,8 @@ func (storage *Storage) Stat(ctx context.Context, name string) (*s4.FileMetadata
 
 func (storage *Storage) Move(ctx context.Context, name, newName string, overwrite bool) (*s4.FileMetadata, error) {
 
-	storage.lock.Lock()
-	defer storage.lock.Unlock()
+	storage.listLock.Lock()
+	defer storage.listLock.Unlock()
 
 	if name == "" {
 		return nil, &s4.NameError{Name: name}
@@ -188,8 +195,8 @@ func (storage *Storage) Move(ctx context.Context, name, newName string, overwrit
 
 func (storage *Storage) Delete(ctx context.Context, name string) (*s4.FileMetadata, error) {
 
-	storage.lock.Lock()
-	defer storage.lock.Unlock()
+	storage.listLock.Lock()
+	defer storage.listLock.Unlock()
 
 	stat, err := storage.Stat(ctx, name)
 	if err != nil {
@@ -206,8 +213,8 @@ func (storage *Storage) Delete(ctx context.Context, name string) (*s4.FileMetada
 
 func (storage *Storage) List(ctx context.Context, prefix string, recursive bool, offset, limit int) ([]s4.FileMetadata, error) {
 
-	storage.lock.Lock()
-	defer storage.lock.Unlock()
+	storage.listLock.Lock()
+	defer storage.listLock.Unlock()
 
 	dirname := path.Dir(path.Join(storage.RootDir, prefix))
 
