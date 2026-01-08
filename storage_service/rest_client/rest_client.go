@@ -55,12 +55,12 @@ func (client *RestClient) Put(ctx context.Context, entry *s4.FileUpload, overwri
 		return nil, err
 	}
 
-	//	todo: fix header name
-	req.Header.Set("X-Content-Length", strconv.FormatInt(entry.Size, 10))
-	req.Header.Set("Date", entry.Modified.Format(time.RFC1123))
+	req.Header.Set("Content-Range", fmt.Sprintf("bytes */%d", entry.Size))
+
+	req.Header.Set("Last-Modified", entry.Modified.Format(time.RFC1123))
 
 	if entry.SHA256 != "" {
-		req.Header.Set("Etag", "sha256="+entry.SHA256)
+		req.Header.Set("If-None-Match", "sha256="+entry.SHA256)
 	}
 
 	return executeJSONRequest[*s4.FileMetadata](req)
@@ -82,9 +82,11 @@ func (client *RestClient) Download(ctx context.Context, name string) (*s4.Readab
 	}
 
 	if response.StatusCode != http.StatusOK {
+
 		if _, err := parseJSONResponse[any](response); err != nil {
 			return nil, err
 		}
+
 		return nil, &NetworkError{
 			Message:       "api error",
 			OriginalError: fmt.Errorf("non-json response for a blob erorr"),
@@ -95,12 +97,12 @@ func (client *RestClient) Download(ctx context.Context, name string) (*s4.Readab
 		Name: name,
 	}
 
-	if val, _ := strconv.ParseInt(response.Header.Get("Content-Length"), 10, 64); val > 0 {
-		meta.Size = val
+	if val, _ := time.Parse(time.RFC1123, response.Header.Get("Last-Modified")); !val.IsZero() {
+		meta.Modified = val
 	}
 
-	if val, _ := time.Parse(time.RFC1123, response.Header.Get("Date")); !val.IsZero() {
-		meta.Modified = val
+	if val, _ := strconv.ParseInt(response.Header.Get("Content-Length"), 10, 64); val > 0 {
+		meta.Size = val
 	}
 
 	if val, ok := strings.CutPrefix(response.Header.Get("Content-Disposition"), "attachment;"); ok {

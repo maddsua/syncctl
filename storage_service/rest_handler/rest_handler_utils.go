@@ -9,23 +9,23 @@ import (
 	s4 "github.com/maddsua/syncctl/storage_service"
 )
 
-type ByteRange struct {
+type contentRange struct {
 	Start, End, TotalSize int64
 	Valid                 bool
 }
 
-func (byterange *ByteRange) Size() int64 {
-	return byterange.End - byterange.Start
+func (cr *contentRange) Size() int64 {
+	return cr.End - cr.Start
 }
 
-func (byterange *ByteRange) String() string {
-	return fmt.Sprintf("bytes %d-%d/%d", byterange.Start, byterange.End, byterange.TotalSize)
+func (cr *contentRange) String() string {
+	return fmt.Sprintf("bytes %d-%d/%d", cr.Start, cr.End, cr.TotalSize)
 }
 
-func (byterange *ByteRange) ParseWith(val string, totalSize int64) error {
+func (cr *contentRange) ParseWith(val string, totalSize int64) error {
 
 	if val == "" {
-		*byterange = ByteRange{}
+		*cr = contentRange{}
 		return nil
 	}
 
@@ -44,38 +44,38 @@ func (byterange *ByteRange) ParseWith(val string, totalSize int64) error {
 		return fmt.Errorf("invalid range value")
 	}
 
-	byterange.TotalSize = totalSize
+	cr.TotalSize = totalSize
 
 	if before != "" {
-		byterange.Start, _ = strconv.ParseInt(before, 10, 64)
-		if byterange.Start < 0 {
+		cr.Start, _ = strconv.ParseInt(before, 10, 64)
+		if cr.Start < 0 {
 			return fmt.Errorf("invalid range start")
-		} else if byterange.Start >= byterange.TotalSize {
+		} else if cr.Start >= cr.TotalSize {
 			return fmt.Errorf("range start exceeds file size")
 		}
 	}
 
 	if after != "" {
-		byterange.End, _ = strconv.ParseInt(after, 10, 64)
-		if byterange.End < 0 {
+		cr.End, _ = strconv.ParseInt(after, 10, 64)
+		if cr.End < 0 {
 			return fmt.Errorf("invalid range end")
-		} else if byterange.TotalSize > 0 && byterange.End > byterange.TotalSize {
+		} else if cr.TotalSize > 0 && cr.End > cr.TotalSize {
 			return fmt.Errorf("range end exceeds file size")
-		} else if byterange.Start >= byterange.End {
+		} else if cr.Start >= cr.End {
 			return fmt.Errorf("range start and end are overlapping")
 		}
 	}
 
-	if byterange.End == 0 {
-		byterange.End = byterange.TotalSize
+	if cr.End == 0 {
+		cr.End = cr.TotalSize
 	}
 
-	byterange.Valid = true
+	cr.Valid = true
 
 	return nil
 }
 
-func GetErrorCode(err error) int {
+func errorCode(err error) int {
 
 	switch err.(type) {
 	case *s4.FileNotFoundError:
@@ -89,24 +89,24 @@ func GetErrorCode(err error) int {
 	}
 }
 
-func NewGenericResponse[T any](val T, err error) *s4.APIResponse[T] {
+func genericResponse[T any](val T, err error) *s4.APIResponse[T] {
 
 	if err != nil {
 		return &s4.APIResponse[T]{
 			Error: &s4.APIError{
 				Message:  err.Error(),
-				WithCode: GetErrorCode(err),
+				WithCode: errorCode(err),
 			},
 		}
 	}
 	return &s4.APIResponse[T]{Data: val}
 }
 
-func NewErrorResponse(err error) *s4.APIResponse[any] {
+func errorResponse(err error) *s4.APIResponse[any] {
 	return &s4.APIResponse[any]{
 		Error: &s4.APIError{
 			Message:  err.Error(),
-			WithCode: GetErrorCode(err),
+			WithCode: errorCode(err),
 		},
 	}
 }

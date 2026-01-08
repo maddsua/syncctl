@@ -16,6 +16,7 @@ import (
 func NewHandler(storage s4.Storage) s4.SyncHandler {
 
 	//	todo: handle auth
+	//	todo: add event logging
 
 	var wg sync.WaitGroup
 	var mux http.ServeMux
@@ -30,24 +31,26 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 		defer wg.Done()
 
 		meta := s4.FileMetadata{
-			Name:     req.URL.Query().Get("name"),
-			Modified: time.Now(),
+			Name: req.URL.Query().Get("name"),
 		}
 
-		//	todo: fix header name
-		if val, _ := strconv.ParseInt(req.Header.Get("X-Content-Length"), 10, 64); val > 0 {
-			meta.Size = val
-		}
-
-		if val, _ := time.Parse(time.RFC1123, req.Header.Get("Date")); !val.IsZero() {
+		if val, _ := time.Parse(time.RFC1123, req.Header.Get("Last-Modified")); !val.IsZero() {
 			meta.Modified = val
 		}
 
-		if val, ok := strings.CutPrefix(req.Header.Get("Etag"), "sha256="); ok {
+		if val := req.Header.Get("Content-Range"); strings.HasPrefix(val, "bytes") {
+			if _, after, ok := strings.Cut(val, "/"); ok {
+				if val, _ := strconv.ParseInt(after, 10, 64); val > 0 {
+					meta.Size = val
+				}
+			}
+		}
+
+		if val, ok := strings.CutPrefix(req.Header.Get("If-None-Match"), "sha256="); ok {
 			meta.SHA256 = val
 		}
 
-		NewGenericResponse(storage.Put(req.Context(), &s4.FileUpload{
+		genericResponse(storage.Put(req.Context(), &s4.FileUpload{
 			FileMetadata: meta,
 			Reader:       req.Body,
 		}, strings.EqualFold(req.URL.Query().Get("overwrite"), "true"))).WriteJSON(wrt)
@@ -60,42 +63,45 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 
 		file, err := storage.Get(req.Context(), req.URL.Query().Get("name"))
 		if err != nil {
-			NewErrorResponse(err).WriteJSON(wrt)
+			errorResponse(err).WriteJSON(wrt)
 			return
 		}
 
 		defer file.ReadSeekCloser.Close()
 
-		dataRange := ByteRange{}
-		if err := dataRange.ParseWith(req.Header.Get("Range"), file.Size); err != nil {
+		cringe := contentRange{}
+		if err := cringe.ParseWith(req.Header.Get("Range"), file.Size); err != nil {
 			NewErrorResponseWithCode(err.Error(), http.StatusRequestedRangeNotSatisfiable).WriteJSON(wrt)
 			return
 		}
 
+		//	static headers that aren't really needed but still are set for informational purposes
 		wrt.Header().Set("Content-Type", "application/octet-stream")
-		wrt.Header().Set("Date", file.FileMetadata.Modified.Format(time.RFC1123))
-		wrt.Header().Set("Content-Disposition", "attachment; filename="+url.QueryEscape(file.Name))
-		wrt.Header().Set("Etag", "sha256="+file.FileMetadata.SHA256)
 		wrt.Header().Set("Accept-Ranges", "bytes")
 
-		if dataRange.Valid {
-			wrt.Header().Set("Content-Length", strconv.FormatInt(dataRange.Size(), 10))
-			wrt.Header().Set("Content-Range", dataRange.String())
+		//	these are dynamic and slightly repurposed headers
+		wrt.Header().Set("Last-Modified", file.FileMetadata.Modified.Format(time.RFC1123))
+		wrt.Header().Set("Content-Disposition", "attachment; filename="+url.QueryEscape(file.Name))
+		wrt.Header().Set("Etag", "sha256="+file.FileMetadata.SHA256)
+
+		if cringe.Valid {
+			wrt.Header().Set("Content-Length", strconv.FormatInt(cringe.Size(), 10))
+			wrt.Header().Set("Content-Range", cringe.String())
 			wrt.WriteHeader(http.StatusPartialContent)
 		} else {
 			wrt.Header().Set("Content-Length", strconv.FormatInt(file.FileMetadata.Size, 10))
 			wrt.WriteHeader(http.StatusOK)
 		}
 
-		if dataRange.Valid && dataRange.Start > 0 {
-			if _, err := file.ReadSeekCloser.Seek(dataRange.Start, io.SeekStart); err != nil {
+		if cringe.Valid && cringe.Start > 0 {
+			if _, err := file.ReadSeekCloser.Seek(cringe.Start, io.SeekStart); err != nil {
 				NewErrorResponseWithCode(err.Error(), http.StatusInternalServerError).WriteJSON(wrt)
 			}
 		}
 
 		var bodyReader io.Reader = file.ReadSeekCloser
-		if dataRange.Valid && dataRange.End > 0 {
-			bodyReader = io.LimitReader(file.ReadSeekCloser, dataRange.Size())
+		if cringe.Valid && cringe.End > 0 {
+			bodyReader = io.LimitReader(file.ReadSeekCloser, cringe.Size())
 		}
 
 		if _, err := io.Copy(wrt, bodyReader); err != nil {
@@ -111,7 +117,7 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 	})
 
 	mux.HandleFunc("GET /stat", func(wrt http.ResponseWriter, req *http.Request) {
-		NewGenericResponse(storage.Stat(req.Context(), req.URL.Query().Get("name"))).WriteJSON(wrt)
+		genericResponse(storage.Stat(req.Context(), req.URL.Query().Get("name"))).WriteJSON(wrt)
 	})
 
 	mux.HandleFunc("GET /list", func(wrt http.ResponseWriter, req *http.Request) {
@@ -122,7 +128,7 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 		wg.Add(1)
 		defer wg.Done()
 
-		NewGenericResponse(storage.List(
+		genericResponse(storage.List(
 			req.Context(),
 			req.URL.Query().Get("prefix"),
 			strings.EqualFold(req.URL.Query().Get("recursive"), "true"),
@@ -132,7 +138,7 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 	})
 
 	mux.HandleFunc("POST /move", func(wrt http.ResponseWriter, req *http.Request) {
-		NewGenericResponse(storage.Move(
+		genericResponse(storage.Move(
 			req.Context(),
 			req.URL.Query().Get("name"),
 			req.URL.Query().Get("new_name"),
@@ -141,7 +147,7 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 	})
 
 	mux.HandleFunc("DELETE /delete", func(wrt http.ResponseWriter, req *http.Request) {
-		NewGenericResponse(storage.Delete(
+		genericResponse(storage.Delete(
 			req.Context(),
 			req.URL.Query().Get("name"),
 		)).WriteJSON(wrt)
