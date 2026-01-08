@@ -53,49 +53,74 @@ func ListAllRegularFiles(name string) ([]string, error) {
 
 func WithFileVersion(name string, idx int) string {
 
+	if idx <= 1 {
+		return name
+	}
+
 	ext := path.Ext(name)
 	name = strings.TrimSuffix(name, ext)
 
 	return name + "-" + strconv.Itoa(idx) + ext
 }
 
-func HighestFileVersion(name string) (int, error) {
+func NamedFileHighestVersion(name string) (int, error) {
 
 	entries, err := os.ReadDir(path.Dir(name))
 	if err != nil {
 		return 0, err
 	} else if len(entries) < 2 {
-		return 0, nil
+		return 1, nil
 	}
 
-	ext := path.Ext(name)
-	baseName := strings.TrimSuffix(path.Base(name), ext)
-
-	var indexes []int
+	indexer := FileVersionIndexer{BaseName: name}
 
 	for _, entry := range entries {
-
-		name := entry.Name()
-
-		if !strings.HasPrefix(name, baseName) || !strings.HasSuffix(name, ext) {
-			continue
-		}
-
-		diff := name[len(baseName):]
-		diff = diff[:len(diff)-len(ext)]
-		if len(diff) < 2 || diff[0] != '-' {
-			continue
-		}
-
-		idx, _ := strconv.Atoi(diff[1:])
-		indexes = append(indexes, idx)
+		indexer.Index(entry.Name())
 	}
 
-	if len(indexes) < 2 {
-		return 0, nil
+	return indexer.Sum(), nil
+}
+
+type FileVersionIndexer struct {
+	//	Original (non-versioned) file name
+	BaseName string
+
+	prefix, suffix string
+	ready          bool
+	values         []int
+}
+
+func (indexer *FileVersionIndexer) Index(name string) {
+
+	if !indexer.ready {
+		indexer.suffix = path.Ext(indexer.BaseName)
+		indexer.prefix = strings.TrimSuffix(path.Base(indexer.BaseName), indexer.suffix)
+		indexer.ready = true
 	}
 
-	slices.Sort(indexes)
+	name = path.Base(name)
 
-	return indexes[len(indexes)-1], nil
+	if !strings.HasPrefix(name, indexer.prefix) || !strings.HasSuffix(name, indexer.suffix) {
+		return
+	}
+
+	diff := name[len(indexer.prefix):]
+	diff = diff[:len(diff)-len(indexer.suffix)]
+	if len(diff) < 2 || diff[0] != '-' {
+		return
+	}
+
+	idx, _ := strconv.Atoi(diff[1:])
+	indexer.values = append(indexer.values, idx)
+}
+
+func (indexer *FileVersionIndexer) Sum() int {
+
+	if len(indexer.values) == 0 {
+		return 1
+	}
+
+	slices.Sort(indexer.values)
+
+	return indexer.values[len(indexer.values)-1]
 }

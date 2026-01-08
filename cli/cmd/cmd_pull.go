@@ -111,19 +111,20 @@ func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, o
 				return nil
 			}
 
-			ver, err := utils.HighestFileVersion(localPath)
+			version, err := utils.NamedFileHighestVersion(localPath)
 			if err != nil {
 				return err
 			}
 
-			if hash, err := utils.NamedFileHashSha256(utils.WithFileVersion(localPath, ver)); err != nil {
-				localPath = utils.WithFileVersion(localPath, ver)
-				fmt.Printf("--> Updating version %d of '%s'\n", ver, localPath)
+			latest := utils.WithFileVersion(localPath, version)
+
+			if hash, err := utils.NamedFileHashSha256(latest); err != nil {
+				return fmt.Errorf("hash '%s': %v", latest, err)
 			} else if hash != entry.SHA256 {
-				fmt.Printf("--> Adding version %d to '%s'\n", ver+1, localPath)
-				localPath = utils.WithFileVersion(localPath, ver+1)
+				fmt.Printf("--> Adding version %d to '%s'\n", version+1, localPath)
+				localPath = utils.WithFileVersion(localPath, version+1)
 			} else {
-				fmt.Printf("--> Up to date '%s'\n", localPath)
+				fmt.Printf("--> Up to date '%s', version %d\n", localPath, version)
 				return nil
 			}
 

@@ -98,11 +98,30 @@ func pushEntry(ctx context.Context, client s4.StorageClient, name, remotePath st
 
 		case syncctl.ResolveAsVersions:
 
-			//	todo: refactor HighestFileVersion to work with maps
-			//	todo: diff versions
-			//	todo: pick a new name or bail
+			prefix := strings.TrimSuffix(remotePath, path.Ext(remotePath))
 
-			return fmt.Errorf("'ResolveAsVersions' not implemented yet")
+			entries, err := client.List(ctx, prefix, false, 0, 0)
+			if err != nil {
+				return err
+			}
+
+			indexer := utils.FileVersionIndexer{BaseName: remotePath}
+			for _, entry := range entries {
+				indexer.Index(entry.Name)
+			}
+
+			version := indexer.Sum()
+			latest := utils.WithFileVersion(remotePath, version)
+
+			if stat, err := client.Stat(ctx, latest); err != nil {
+				return fmt.Errorf("remote stat '%s': %v", latest, err)
+			} else if stat.SHA256 != hash {
+				fmt.Printf("--> Adding version %d to '%s'\n", version+1, remotePath)
+				remotePath = utils.WithFileVersion(remotePath, version+1)
+			} else {
+				fmt.Printf("--> Up to date '%s', version %d\n", remotePath, version)
+				return nil
+			}
 
 		default:
 			return nil
