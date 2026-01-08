@@ -73,13 +73,13 @@ func (reader *BlobReader) seek(newOffset int64) (int64, error) {
 	return reader.offset, err
 }
 
-func (reader *BlobReader) Read(p []byte) (int, error) {
+func (reader *BlobReader) Read(buff []byte) (int, error) {
 
 	if err := reader.initBlob(); err != nil {
 		return -1, err
 	}
 
-	n, err := reader.arc.Read(p)
+	n, err := reader.arc.Read(buff)
 
 	if n > 0 {
 		reader.offset += int64(n)
