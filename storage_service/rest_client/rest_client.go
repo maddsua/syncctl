@@ -19,7 +19,7 @@ type RestClient struct {
 
 func (client *RestClient) Ping(ctx context.Context) error {
 
-	req, err := prepareRequest(client.RemoteURL, client.Auth, http.MethodGet, "gen_204", nil, nil)
+	req, err := prepareRequest(client.RemoteURL, client.Auth, http.MethodGet, "/gen_204", nil, nil)
 	if err != nil {
 		return err
 	}

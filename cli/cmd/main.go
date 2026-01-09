@@ -199,8 +199,8 @@ func main() {
 				},
 			},
 			{
-				Name:  "config",
-				Usage: "Shows current config",
+				Name:  "status",
+				Usage: "Show and check current config",
 				Action: func(ctx context.Context, _ *cli.Command) error {
 
 					if !cfg.Valid {
@@ -213,6 +213,10 @@ func main() {
 					if cfg.Remote.RemoteConfig == nil {
 						fmt.Println("[No remote set]")
 						return nil
+					}
+
+					if _, err := newS4RestClient(&cfg); err != nil {
+						return cli.Exit(fmt.Errorf("Unable to configure client: %v", err), 1)
 					}
 
 					fmt.Println("> Remote:", cfg.Remote.URL())
@@ -284,16 +288,25 @@ func newS4RestClient(cfg *config.Config) (*rest_client.RestClient, error) {
 
 	if remote, ok := cfg.Remote.RemoteConfig.(*config.S4RemoteConfig); ok {
 
-		if remote.Auth != nil {
-			return &rest_client.RestClient{
-				RemoteURL: remote.RemoteURL,
-				Auth:      url.UserPassword(remote.Auth.Username, remote.Auth.Password),
-			}, nil
+		var check = func(client *rest_client.RestClient) (*rest_client.RestClient, error) {
+
+			if err := client.Ping(context.Background()); err != nil {
+				return client, fmt.Errorf("ping: %v", err)
+			}
+
+			return client, nil
 		}
 
-		return &rest_client.RestClient{
+		if remote.Auth != nil {
+			return check(&rest_client.RestClient{
+				RemoteURL: remote.RemoteURL,
+				Auth:      url.UserPassword(remote.Auth.Username, remote.Auth.Password),
+			})
+		}
+
+		return check(&rest_client.RestClient{
 			RemoteURL: remote.RemoteURL,
-		}, nil
+		})
 	}
 
 	return nil, fmt.Errorf("unsupported remote type")

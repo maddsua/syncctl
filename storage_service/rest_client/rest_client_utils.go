@@ -2,6 +2,7 @@ package rest_client
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -60,7 +61,7 @@ func executeRequest(req *http.Request) (*http.Response, error) {
 		if err, ok := err.(*url.Error); ok {
 			return nil, &NetworkError{
 				Message:       "api request",
-				OriginalError: err,
+				OriginalError: errors.Unwrap(err),
 			}
 		}
 
