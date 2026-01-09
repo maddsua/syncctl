@@ -1,18 +1,68 @@
 package config
 
 import (
-	"fmt"
-	"net"
-	"net/url"
-	"strings"
+	"encoding/json"
 )
 
-type RemoteConfig struct {
-	URL  string             `json:"url"`
-	Auth *RemoteCredentials `json:"auth"`
+type RemoteType string
+
+const (
+	RemoteTypeS4 = RemoteType("s4")
+)
+
+type RemoteConfig interface {
+	URL() string
+	Type() RemoteType
 }
 
-type RemoteCredentials struct {
+type RemoteConfigState struct {
+	Type   RemoteType      `json:"type"`
+	Config json.RawMessage `json:"config"`
+}
+
+type RemoteConfigWrapper struct {
+	RemoteConfig
+}
+
+func (wrapper RemoteConfigWrapper) MarshalJSON() ([]byte, error) {
+
+	if wrapper.RemoteConfig == nil {
+		return json.Marshal(nil)
+	}
+
+	confg, err := json.Marshal(wrapper.RemoteConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	return json.Marshal(RemoteConfigState{
+		Type:   wrapper.RemoteConfig.Type(),
+		Config: confg,
+	})
+}
+
+func (wrapper *RemoteConfigWrapper) UnmarshalJSON(bytes []byte) error {
+
+	var state RemoteConfigState
+	if err := json.Unmarshal(bytes, &state); err != nil {
+		return err
+	}
+
+	switch state.Type {
+	case RemoteTypeS4:
+
+		var config S4RemoteConfig
+		if err := json.Unmarshal(state.Config, &config); err != nil {
+			return err
+		}
+
+		wrapper.RemoteConfig = &config
+	}
+
+	return nil
+}
+
+/* type RemoteCredentials struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
@@ -106,3 +156,4 @@ func ParseRemoteCredentials(val string) (*RemoteCredentials, error) {
 		Password: password,
 	}, nil
 }
+*/

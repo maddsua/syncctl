@@ -25,8 +25,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	client := instantiateClient(&cfg)
-
 	var conflictFlagValue = &cliutils.EnumValue{
 		Options: []string{string(syncctl.ResolveSkip), string(syncctl.ResolveOverwrite), string(syncctl.ResolveAsVersions)},
 		Value:   string(syncctl.ResolveSkip),
@@ -59,7 +57,8 @@ func main() {
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 
-					if err := isRemoteConfigured(&cfg); err != nil {
+					client, err := newS4RestClient(&cfg)
+					if err != nil {
 						return err
 					}
 
@@ -75,7 +74,7 @@ func main() {
 					onConflict := syncctl.ResolvePolicy(cmd.String("conflict"))
 					prune := cmd.Bool("prune")
 
-					if err := isConflictResolutionConflict(onConflict, prune); err != nil {
+					if err := canResolveFileConflicts(onConflict, prune); err != nil {
 						return err
 					}
 
@@ -107,7 +106,8 @@ func main() {
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 
-					if err := isRemoteConfigured(&cfg); err != nil {
+					client, err := newS4RestClient(&cfg)
+					if err != nil {
 						return err
 					}
 
@@ -123,7 +123,7 @@ func main() {
 					onConflict := syncctl.ResolvePolicy(cmd.String("conflict"))
 					prune := cmd.Bool("prune")
 
-					if err := isConflictResolutionConflict(onConflict, prune); err != nil {
+					if err := canResolveFileConflicts(onConflict, prune); err != nil {
 						return err
 					}
 
@@ -148,64 +148,50 @@ func main() {
 								},
 								Action: func(ctx context.Context, cmd *cli.Command) error {
 
-									urlArg := cmd.StringArg("url")
-									if urlArg == "" {
+									inputURL := cmd.StringArg("url")
+									if inputURL == "" {
 										return cli.Exit("Forgot to set the URL itself huh?", 1)
 									}
 
-									url, creds, err := config.ParseRemoteUrl(urlArg)
-									if err != nil {
-										return cli.Exit(fmt.Sprintf("invalid remote url: %v", err), 1)
+									remoteURL, err := url.Parse(inputURL)
+									if err != nil || remoteURL.Scheme == "" || remoteURL.Host == "" {
+										return cli.Exit("Invalid url argument", 1)
 									}
 
-									fmt.Println("Setting remote url:", url)
+									switch remoteURL.Scheme {
 
-									if cfg.Remote.URL != url {
+									case "http", "https":
 
-										cfg.Remote.URL = url
+										fmt.Println("Note: Assuming S4 remote url")
 
-										if creds != nil {
-											fmt.Println("Setting remote user:", creds.Username)
-											cfg.Remote.Auth = creds
-										} else {
-											cfg.Remote.Auth = nil
-											fmt.Println("Note: Don't forget to update your credentials")
+										baseURL := url.URL{
+											Scheme: remoteURL.Scheme,
+											Host:   remoteURL.Host,
+											Path:   remoteURL.Path,
+										}
+
+										fmt.Println("Setting remote url:", remoteURL)
+
+										var auth *config.S4BasicAuth
+										if remoteURL.User != nil && remoteURL.User.Username() != "" {
+											pass, _ := remoteURL.User.Password()
+											auth = &config.S4BasicAuth{
+												Username: remoteURL.User.Username(),
+												Password: pass,
+											}
+											fmt.Println("Setting remote user:", auth.Username)
+										}
+
+										cfg.Remote.RemoteConfig = &config.S4RemoteConfig{
+											RemoteURL: baseURL.String(),
+											Auth:      auth,
 										}
 
 										cfg.Changed = true
+										return nil
 									}
 
-									return nil
-								},
-							},
-							{
-								Name:  "auth",
-								Usage: "Set remote credentials",
-								Arguments: []cli.Argument{
-									&cli.StringArg{
-										Name: "credentials",
-									},
-								},
-								Action: func(ctx context.Context, cmd *cli.Command) error {
-
-									credsArg := cmd.StringArg("credentials")
-									if credsArg == "" {
-										return cli.Exit("Forgot to set the credentials string itself huh?", 1)
-									}
-
-									newVal, err := config.ParseRemoteCredentials(credsArg)
-									if err != nil {
-										return cli.Exit(fmt.Sprintf("invalid remote credentials: %v", err), 1)
-									}
-
-									fmt.Println("Setting remote credentials")
-
-									if cfg.Remote.Auth == nil || !cfg.Remote.Auth.Equal(newVal) {
-										cfg.Remote.Auth = newVal
-										cfg.Changed = true
-									}
-
-									return nil
+									return cli.Exit("Unsupported url", 1)
 								},
 							},
 						},
@@ -218,15 +204,24 @@ func main() {
 				Action: func(ctx context.Context, _ *cli.Command) error {
 
 					if !cfg.Valid {
-						fmt.Println("[No config]")
+						fmt.Println("[No config found]")
 						return nil
 					}
 
 					fmt.Println("> Location:", cfg.Location)
-					fmt.Println("> Remote:", cfg.Remote.URL)
 
-					if cfg.Remote.Auth != nil {
-						fmt.Println("> User:", cfg.Remote.Auth.Username)
+					if cfg.Remote.RemoteConfig == nil {
+						fmt.Println("[No remote set]")
+						return nil
+					}
+
+					fmt.Println("> Remote:", cfg.Remote.URL())
+					fmt.Println("> Remote type:", cfg.Remote.Type())
+
+					if remote, ok := cfg.Remote.RemoteConfig.(*config.S4RemoteConfig); ok && remote.Auth != nil {
+						fmt.Println("> User:", remote.Auth.Username)
+					} else {
+						fmt.Println("[No user set]")
 					}
 
 					return nil
@@ -274,34 +269,32 @@ func main() {
 	}
 }
 
-func isConflictResolutionConflict(onConflict syncctl.ResolvePolicy, prune bool) error {
+func canResolveFileConflicts(onConflict syncctl.ResolvePolicy, prune bool) error {
 	if onConflict == syncctl.ResolveAsVersions && prune {
 		return cli.Exit("How the fuck do you expect it to keep more than one version while also prunnig everything that's not on the remote?????????????", 1)
 	}
 	return nil
 }
 
-func isRemoteConfigured(cfg *config.Config) error {
+func newS4RestClient(cfg *config.Config) (*rest_client.RestClient, error) {
 
-	if !cfg.Valid || cfg.Remote.URL == "" {
-		return cli.Exit("Remote not configured. Use 'set remote url' command to set it", 1)
-	} else if cfg.Remote.Auth == nil || cfg.Remote.Auth.Username == "" {
-		return cli.Exit("Remote auth not configured. Use 'set remote auth' command to set it", 1)
+	if cfg.Remote.RemoteConfig == nil {
+		return nil, cli.Exit("Remote not configured. Use 'set remote url' command to set it", 1)
 	}
 
-	return nil
-}
+	if remote, ok := cfg.Remote.RemoteConfig.(*config.S4RemoteConfig); ok {
 
-func instantiateClient(cfg *config.Config) *rest_client.RestClient {
-
-	if cfg.Remote.Auth == nil {
-		return &rest_client.RestClient{
-			RemoteURL: cfg.Remote.URL,
+		if remote.Auth != nil {
+			return &rest_client.RestClient{
+				RemoteURL: remote.RemoteURL,
+				Auth:      url.UserPassword(remote.Auth.Username, remote.Auth.Password),
+			}, nil
 		}
+
+		return &rest_client.RestClient{
+			RemoteURL: remote.RemoteURL,
+		}, nil
 	}
 
-	return &rest_client.RestClient{
-		RemoteURL: cfg.Remote.URL,
-		Auth:      url.UserPassword(cfg.Remote.Auth.Username, cfg.Remote.Auth.Password),
-	}
+	return nil, fmt.Errorf("unsupported remote type")
 }
