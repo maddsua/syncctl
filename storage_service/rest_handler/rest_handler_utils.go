@@ -97,7 +97,7 @@ func writeError(wrt http.ResponseWriter, err error) error {
 		return writeErrorWithCode(wrt, err, http.StatusBadRequest)
 	case *AuthError:
 
-		if err.Informational {
+		if !err.IsInvalid {
 			wrt.Header().Set("WWW-Authenticate", "Basic")
 			return writeErrorWithCode(wrt, err, http.StatusUnauthorized)
 		}

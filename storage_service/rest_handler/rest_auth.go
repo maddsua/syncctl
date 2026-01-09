@@ -29,7 +29,7 @@ func (auth *AuthThingy) Authorize(req *http.Request) (*UserState, error) {
 	creds := extractBasicAuth(req)
 	if creds == nil {
 		slog.Debug("User auth: Unauthorized")
-		return nil, &AuthError{Message: "unauthorized", Informational: true}
+		return nil, &AuthError{}
 	}
 
 	entry, _ := auth.users.Load(creds.Username())
@@ -40,7 +40,7 @@ func (auth *AuthThingy) Authorize(req *http.Request) (*UserState, error) {
 		if subtle.ConstantTimeCompare([]byte(state.Password), []byte(pass)) != 1 {
 			slog.Warn("User auth: Password mismatch",
 				slog.String("username", state.Username))
-			return nil, &AuthError{Message: "invalid password"}
+			return nil, &AuthError{IsInvalid: true}
 		}
 
 		return state, nil
@@ -49,7 +49,7 @@ func (auth *AuthThingy) Authorize(req *http.Request) (*UserState, error) {
 	slog.Warn("User auth: Username not found",
 		slog.String("username", creds.Username()))
 
-	return nil, &AuthError{Message: "invalid username"}
+	return nil, &AuthError{IsInvalid: true}
 }
 
 func extractBasicAuth(req *http.Request) *url.Userinfo {
@@ -92,10 +92,12 @@ func (user *UserState) UnscopePath(name string) string {
 }
 
 type AuthError struct {
-	Message       string
-	Informational bool
+	IsInvalid bool
 }
 
 func (err *AuthError) Error() string {
-	return err.Message
+	if err.IsInvalid {
+		return "invalid credentials"
+	}
+	return "unauthorized"
 }
