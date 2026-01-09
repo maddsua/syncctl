@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -11,8 +10,8 @@ import (
 
 	"github.com/maddsua/syncctl"
 	cliutils "github.com/maddsua/syncctl/cli/cli_utils"
+	"github.com/maddsua/syncctl/cli/commands"
 	"github.com/maddsua/syncctl/cli/config"
-	"github.com/maddsua/syncctl/storage_service/rest_client"
 	"github.com/urfave/cli/v3"
 )
 
@@ -57,7 +56,7 @@ func main() {
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 
-					client, err := newS4RestClient(&cfg)
+					client, err := cliutils.NewS4RestClient(&cfg)
 					if err != nil {
 						return err
 					}
@@ -78,7 +77,11 @@ func main() {
 						return err
 					}
 
-					return pullCmd(ctx, client, remoteDir, localDir, onConflict, prune)
+					if err := commands.Pull(ctx, client, remoteDir, localDir, onConflict, prune); err != nil {
+						return cli.Exit(err, 1)
+					}
+
+					return nil
 				},
 			},
 			{
@@ -106,7 +109,7 @@ func main() {
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 
-					client, err := newS4RestClient(&cfg)
+					client, err := cliutils.NewS4RestClient(&cfg)
 					if err != nil {
 						return err
 					}
@@ -127,7 +130,11 @@ func main() {
 						return err
 					}
 
-					return pushCmd(ctx, client, localDir, remoteDir, onConflict, prune)
+					if err := commands.Push(ctx, client, localDir, remoteDir, onConflict, prune); err != nil {
+						return cli.Exit(err, 1)
+					}
+
+					return nil
 				},
 			},
 			{
@@ -153,45 +160,11 @@ func main() {
 										return cli.Exit("Forgot to set the URL itself huh?", 1)
 									}
 
-									remoteURL, err := url.Parse(inputURL)
-									if err != nil || remoteURL.Scheme == "" || remoteURL.Host == "" {
-										return cli.Exit("Invalid url argument", 1)
+									if err := commands.SetRemoteUrl(inputURL, &cfg); err != nil {
+										return cli.Exit(err, 1)
 									}
 
-									switch remoteURL.Scheme {
-
-									case "http", "https":
-
-										fmt.Println("Note: Assuming S4 remote url")
-
-										baseURL := url.URL{
-											Scheme: remoteURL.Scheme,
-											Host:   remoteURL.Host,
-											Path:   remoteURL.Path,
-										}
-
-										fmt.Println("Setting remote url:", remoteURL)
-
-										var auth *config.S4BasicAuth
-										if remoteURL.User != nil && remoteURL.User.Username() != "" {
-											pass, _ := remoteURL.User.Password()
-											auth = &config.S4BasicAuth{
-												Username: remoteURL.User.Username(),
-												Password: pass,
-											}
-											fmt.Println("Setting remote user:", auth.Username)
-										}
-
-										cfg.Remote.RemoteConfig = &config.S4RemoteConfig{
-											RemoteURL: baseURL.String(),
-											Auth:      auth,
-										}
-
-										cfg.Changed = true
-										return nil
-									}
-
-									return cli.Exit("Unsupported url", 1)
+									return nil
 								},
 							},
 						},
@@ -202,32 +175,9 @@ func main() {
 				Name:  "status",
 				Usage: "Show and check current config",
 				Action: func(ctx context.Context, _ *cli.Command) error {
-
-					if !cfg.Valid {
-						fmt.Println("[No config found]")
-						return nil
+					if err := commands.Status(&cfg); err != nil {
+						return cli.Exit(err, 1)
 					}
-
-					fmt.Println("> Location:", cfg.Location)
-
-					if cfg.Remote.RemoteConfig == nil {
-						fmt.Println("[No remote set]")
-						return nil
-					}
-
-					if _, err := newS4RestClient(&cfg); err != nil {
-						return cli.Exit(fmt.Errorf("Unable to configure client: %v", err), 1)
-					}
-
-					fmt.Println("> Remote:", cfg.Remote.URL())
-					fmt.Println("> Remote type:", cfg.Remote.Type())
-
-					if remote, ok := cfg.Remote.RemoteConfig.(*config.S4RemoteConfig); ok && remote.Auth != nil {
-						fmt.Println("> User:", remote.Auth.Username)
-					} else {
-						fmt.Println("[No user set]")
-					}
-
 					return nil
 				},
 			},
@@ -278,36 +228,4 @@ func canResolveFileConflicts(onConflict syncctl.ResolvePolicy, prune bool) error
 		return cli.Exit("How the fuck do you expect it to keep more than one version while also prunnig everything that's not on the remote?????????????", 1)
 	}
 	return nil
-}
-
-func newS4RestClient(cfg *config.Config) (*rest_client.RestClient, error) {
-
-	if cfg.Remote.RemoteConfig == nil {
-		return nil, cli.Exit("Remote not configured. Use 'set remote url' command to set it", 1)
-	}
-
-	if remote, ok := cfg.Remote.RemoteConfig.(*config.S4RemoteConfig); ok {
-
-		var check = func(client *rest_client.RestClient) (*rest_client.RestClient, error) {
-
-			if err := client.Ping(context.Background()); err != nil {
-				return client, fmt.Errorf("ping: %v", err)
-			}
-
-			return client, nil
-		}
-
-		if remote.Auth != nil {
-			return check(&rest_client.RestClient{
-				RemoteURL: remote.RemoteURL,
-				Auth:      url.UserPassword(remote.Auth.Username, remote.Auth.Password),
-			})
-		}
-
-		return check(&rest_client.RestClient{
-			RemoteURL: remote.RemoteURL,
-		})
-	}
-
-	return nil, fmt.Errorf("unsupported remote type")
 }

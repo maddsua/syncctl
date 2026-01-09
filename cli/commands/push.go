@@ -1,4 +1,4 @@
-package main
+package commands
 
 import (
 	"context"
@@ -10,10 +10,9 @@ import (
 	"github.com/maddsua/syncctl"
 	s4 "github.com/maddsua/syncctl/storage_service"
 	"github.com/maddsua/syncctl/utils"
-	metacli "github.com/urfave/cli/v3"
 )
 
-func pushCmd(ctx context.Context, client s4.StorageClient, localDir, remoteDir string, onconflict syncctl.ResolvePolicy, prune bool) error {
+func Push(ctx context.Context, client s4.StorageClient, localDir, remoteDir string, onconflict syncctl.ResolvePolicy, prune bool) error {
 
 	if onconflict == syncctl.ResolveAsCopy {
 		prune = false
@@ -24,7 +23,7 @@ func pushCmd(ctx context.Context, client s4.StorageClient, localDir, remoteDir s
 	remoteIndex := map[string]*s4.FileMetadata{}
 
 	if entries, err := client.List(ctx, remoteDir, true, 0, 0); err != nil {
-		return metacli.Exit(fmt.Sprintf("Unable to fetch remote index: %v", err), 1)
+		return fmt.Errorf("Unable to fetch remote index: %v", err)
 	} else if len(entries) > 0 {
 		for _, entry := range entries {
 			remoteIndex[entry.Name] = &entry
@@ -35,7 +34,7 @@ func pushCmd(ctx context.Context, client s4.StorageClient, localDir, remoteDir s
 
 	entries, err := utils.ListAllRegularFiles(localDir)
 	if err != nil {
-		return metacli.Exit(fmt.Sprintf("Unable to list local files: %v", err), 1)
+		return fmt.Errorf("Unable to list local files: %v", err)
 	}
 
 	for _, name := range entries {
@@ -45,7 +44,7 @@ func pushCmd(ctx context.Context, client s4.StorageClient, localDir, remoteDir s
 		if err := pushEntry(ctx, client, name, remotePath, remoteIndex[remotePath], onconflict); err != nil {
 			fmt.Fprintf(os.Stderr, "--X Error pushing '%s':\n", name)
 			fmt.Fprintf(os.Stderr, "    %v\n", err)
-			return metacli.Exit("Push aborted", 1)
+			return fmt.Errorf("Push aborted")
 		}
 
 		delete(remoteIndex, remotePath)
@@ -54,7 +53,7 @@ func pushCmd(ctx context.Context, client s4.StorageClient, localDir, remoteDir s
 	if prune {
 		for key := range remoteIndex {
 			if _, err := client.Delete(ctx, key); err != nil {
-				return metacli.Exit(fmt.Sprintf("Unable to prune '%s': %v", key, err), 1)
+				return fmt.Errorf("Unable to prune '%s': %v", key, err)
 			}
 			fmt.Println("--> Prune", key)
 		}

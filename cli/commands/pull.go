@@ -1,4 +1,4 @@
-package main
+package commands
 
 import (
 	"context"
@@ -13,10 +13,9 @@ import (
 	"github.com/maddsua/syncctl"
 	s4 "github.com/maddsua/syncctl/storage_service"
 	"github.com/maddsua/syncctl/utils"
-	metacli "github.com/urfave/cli/v3"
 )
 
-func pullCmd(ctx context.Context, client s4.StorageClient, remoteDir, localDir string, onconflict syncctl.ResolvePolicy, prune bool) error {
+func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir string, onconflict syncctl.ResolvePolicy, prune bool) error {
 
 	if onconflict == syncctl.ResolveAsCopy {
 		prune = false
@@ -30,7 +29,7 @@ func pullCmd(ctx context.Context, client s4.StorageClient, remoteDir, localDir s
 
 		entries, err := utils.ListAllRegularFiles(localDir)
 		if err != nil {
-			return metacli.Exit(fmt.Sprintf("Unable to list local files: %v", err), 1)
+			return fmt.Errorf("Unable to list local files: %v", err)
 		}
 
 		for _, entry := range entries {
@@ -42,7 +41,7 @@ func pullCmd(ctx context.Context, client s4.StorageClient, remoteDir, localDir s
 
 	remoteFiles, err := client.List(ctx, remoteDir, true, 0, 0)
 	if err != nil {
-		return metacli.Exit(fmt.Sprintf("Unable to fetch remote index: %v", err), 1)
+		return fmt.Errorf("Unable to fetch remote index: %v", err)
 	} else if len(remoteFiles) == 0 {
 		fmt.Println("No files on the remote. Exiting.")
 		return nil
@@ -55,7 +54,7 @@ func pullCmd(ctx context.Context, client s4.StorageClient, remoteDir, localDir s
 		if err := pullEntry(ctx, client, localPath, onconflict, &entry); err != nil {
 			fmt.Fprintf(os.Stderr, "--X Error pulling '%s':\n", entry.Name)
 			fmt.Fprintf(os.Stderr, "    %v\n", err)
-			return metacli.Exit("Pull aborted", 1)
+			return fmt.Errorf("Pull aborted")
 		}
 
 		delete(pruneMap, localPath)
@@ -64,7 +63,7 @@ func pullCmd(ctx context.Context, client s4.StorageClient, remoteDir, localDir s
 	if prune {
 		for name := range pruneMap {
 			if err := os.Remove(name); err != nil {
-				return metacli.Exit(fmt.Sprintf("Unable to prune '%s': %v", name, err), 1)
+				return fmt.Errorf("Unable to prune '%s': %v", name, err)
 			}
 			fmt.Println("--> Prune", name)
 		}
