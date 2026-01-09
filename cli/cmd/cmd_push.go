@@ -15,7 +15,7 @@ import (
 
 func pushCmd(ctx context.Context, client s4.StorageClient, localDir, remoteDir string, onconflict syncctl.ResolvePolicy, prune bool) error {
 
-	if onconflict == syncctl.ResolveAsVersions {
+	if onconflict == syncctl.ResolveAsCopy {
 		prune = false
 	}
 
@@ -96,7 +96,7 @@ func pushEntry(ctx context.Context, client s4.StorageClient, name, remotePath st
 
 			fmt.Printf("--> Updating '%s' (%s)\n", remotePath, utils.DataSizeString(float64(stat.Size())))
 
-		case syncctl.ResolveAsVersions:
+		case syncctl.ResolveAsCopy:
 
 			prefix := strings.TrimSuffix(remotePath, path.Ext(remotePath))
 

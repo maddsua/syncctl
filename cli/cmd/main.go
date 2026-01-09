@@ -26,7 +26,7 @@ func main() {
 	}
 
 	var conflictFlagValue = &cliutils.EnumValue{
-		Options: []string{string(syncctl.ResolveSkip), string(syncctl.ResolveOverwrite), string(syncctl.ResolveAsVersions)},
+		Options: []string{string(syncctl.ResolveSkip), string(syncctl.ResolveOverwrite), string(syncctl.ResolveAsCopy)},
 		Value:   string(syncctl.ResolveSkip),
 	}
 
@@ -274,7 +274,7 @@ func main() {
 }
 
 func canResolveFileConflicts(onConflict syncctl.ResolvePolicy, prune bool) error {
-	if onConflict == syncctl.ResolveAsVersions && prune {
+	if onConflict == syncctl.ResolveAsCopy && prune {
 		return cli.Exit("How the fuck do you expect it to keep more than one version while also prunnig everything that's not on the remote?????????????", 1)
 	}
 	return nil

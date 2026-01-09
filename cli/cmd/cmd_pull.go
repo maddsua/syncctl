@@ -18,7 +18,7 @@ import (
 
 func pullCmd(ctx context.Context, client s4.StorageClient, remoteDir, localDir string, onconflict syncctl.ResolvePolicy, prune bool) error {
 
-	if onconflict == syncctl.ResolveAsVersions {
+	if onconflict == syncctl.ResolveAsCopy {
 		prune = false
 	}
 
@@ -104,7 +104,7 @@ func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, o
 
 			fmt.Printf("--> Updating '%s' (%s)\n", localPath, utils.DataSizeString(float64(entry.Size)))
 
-		case syncctl.ResolveAsVersions:
+		case syncctl.ResolveAsCopy:
 
 			if hash == entry.SHA256 {
 				fmt.Printf("--> Up to date '%s'\n", localPath)
