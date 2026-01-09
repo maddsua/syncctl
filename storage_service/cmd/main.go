@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -11,21 +12,39 @@ import (
 
 	s4 "github.com/maddsua/syncctl/storage_service"
 	"github.com/maddsua/syncctl/storage_service/blobstorage"
+	"github.com/maddsua/syncctl/storage_service/config"
 	"github.com/maddsua/syncctl/storage_service/rest_handler"
 )
 
 func main() {
 
-	servePort := EnvIntOr("PORT", 80)
-	//tlsPort := EnvIntOr("TLS_PORT", 442)
+	cfgfile := flag.String("config", "/etc/syncctl/server.yml", "Set config file path")
+	dataDir := flag.String("datadir", "", "Where to store your stupid files")
 
-	//	todo: add tls server
+	flag.Parse()
 
-	storage := blobstorage.Storage{
-		RootDir: "data/server",
+	cfg, err := config.ReadConfig(*cfgfile)
+	if err != nil {
+		slog.Error("Read config",
+			slog.String("err", err.Error()))
+		os.Exit(1)
 	}
 
-	fshandler := rest_handler.NewHandler(&storage)
+	if *dataDir != "" {
+		cfg.DataDir = *dataDir
+	} else if cfg.DataDir == "" {
+		cfg.DataDir = "/var/syncctl/data"
+	}
+
+	if cfg.HttpPort < 80 {
+		cfg.HttpPort = EnvIntOr("PORT", 80)
+	}
+
+	storage := blobstorage.Storage{
+		RootDir: cfg.DataDir,
+	}
+
+	fshandler := rest_handler.NewHandler(&storage, &cfg.AuthConfig)
 
 	var mux http.ServeMux
 
@@ -34,7 +53,7 @@ func main() {
 
 	srv := http.Server{
 		Handler: &mux,
-		Addr:    fmt.Sprintf(":%d", servePort),
+		Addr:    fmt.Sprintf(":%d", cfg.HttpPort),
 	}
 
 	errCh := make(chan error, 2)

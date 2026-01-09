@@ -1,0 +1,6 @@
+http_port: 2000
+data_dir: ./data/server
+users:
+  - username: maddsua
+    password: 12345
+#    root_dir: /madd

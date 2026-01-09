@@ -27,7 +27,7 @@ func TempBlobPath(root, name string) string {
 }
 
 func StripBlobPath(name, root string) string {
-	return path.Clean(strings.TrimSuffix(strings.TrimPrefix(name, root), FileExtBlob))
+	return path.Clean(strings.TrimSuffix(strings.TrimPrefix(path.Clean(name), path.Clean(root)), FileExtBlob))
 }
 
 func WalkDir(dir string, recursive bool, onFile func(name string) (wantMore bool, err error)) error {
@@ -216,11 +216,12 @@ func (storage *Storage) List(ctx context.Context, prefix string, recursive bool,
 	storage.listLock.Lock()
 	defer storage.listLock.Unlock()
 
-	dirname := path.Dir(path.Join(storage.RootDir, prefix))
-
-	stat, _ := os.Stat(dirname)
-	if stat == nil || !stat.IsDir() {
-		return nil, nil
+	dirname := path.Join(storage.RootDir, prefix)
+	if stat, _ := os.Stat(dirname); stat == nil || !stat.IsDir() {
+		dirname = path.Join(storage.RootDir, path.Dir(prefix))
+		if stat, _ = os.Stat(dirname); stat == nil || !stat.IsDir() {
+			return []s4.FileMetadata{}, nil
+		}
 	}
 
 	var filterPrefix string

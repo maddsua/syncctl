@@ -11,11 +11,13 @@ import (
 	"time"
 
 	s4 "github.com/maddsua/syncctl/storage_service"
+	"github.com/maddsua/syncctl/storage_service/config"
 )
 
-func NewHandler(storage s4.Storage) s4.SyncHandler {
+func NewHandler(storage s4.Storage, cfg *config.AuthConfig) s4.SyncHandler {
 
-	//	todo: handle auth
+	var auth AuthThingy
+	auth.LoadUsers(cfg.Users)
 
 	var wg sync.WaitGroup
 	var mux http.ServeMux
@@ -26,15 +28,23 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 
 	mux.HandleFunc("PUT /upload", func(wrt http.ResponseWriter, req *http.Request) {
 
-		wg.Add(1)
-		defer wg.Done()
+		user, err := auth.Authorize(req)
+		if err != nil {
+			writeError(wrt, err)
+			return
+		}
 
 		meta := s4.FileMetadata{
-			Name: req.URL.Query().Get("name"),
+			Name:     user.ScopePath(req.URL.Query().Get("name")),
+			Modified: time.Now(),
 		}
 
 		if val, _ := time.Parse(time.RFC1123, req.Header.Get("Last-Modified")); !val.IsZero() {
 			meta.Modified = val
+		}
+
+		if val, _ := strconv.ParseInt(req.Header.Get("Content-Length"), 10, 64); val > 0 {
+			meta.Size = val
 		}
 
 		if val := req.Header.Get("Content-Range"); strings.HasPrefix(val, "bytes") {
@@ -49,6 +59,9 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 			meta.SHA256 = val
 		}
 
+		wg.Add(1)
+		defer wg.Done()
+
 		result, err := storage.Put(req.Context(), &s4.FileUpload{
 			FileMetadata: meta,
 			Reader:       io.LimitReader(req.Body, meta.Size),
@@ -60,15 +73,25 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 				slog.String("err", err.Error()))
 		}
 
+		if result != nil {
+			result.Name = user.UnscopePath(result.Name)
+		}
+
 		writeGeneirc(wrt, result, err)
 	})
 
 	mux.HandleFunc("GET /download", func(wrt http.ResponseWriter, req *http.Request) {
 
+		user, err := auth.Authorize(req)
+		if err != nil {
+			writeError(wrt, err)
+			return
+		}
+
 		wg.Add(1)
 		defer wg.Done()
 
-		file, err := storage.Get(req.Context(), req.URL.Query().Get("name"))
+		file, err := storage.Get(req.Context(), user.ScopePath(req.URL.Query().Get("name")))
 		if err != nil {
 			slog.Error("Storage: Read file",
 				slog.String("name", file.Name),
@@ -91,7 +114,7 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 
 		//	these are dynamic and slightly repurposed headers
 		wrt.Header().Set("Last-Modified", file.FileMetadata.Modified.Format(time.RFC1123))
-		wrt.Header().Set("Content-Disposition", "attachment; filename="+url.QueryEscape(file.Name))
+		wrt.Header().Set("Content-Disposition", "attachment; filename="+url.QueryEscape(user.UnscopePath(file.Name)))
 		wrt.Header().Set("Etag", "sha256="+file.FileMetadata.SHA256)
 
 		if cringe.Valid {
@@ -132,7 +155,13 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 
 	mux.HandleFunc("GET /stat", func(wrt http.ResponseWriter, req *http.Request) {
 
-		name := req.URL.Query().Get("name")
+		user, err := auth.Authorize(req)
+		if err != nil {
+			writeError(wrt, err)
+			return
+		}
+
+		name := user.ScopePath(req.URL.Query().Get("name"))
 
 		result, err := storage.Stat(req.Context(), name)
 		if err != nil {
@@ -141,12 +170,23 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 				slog.String("err", err.Error()))
 		}
 
+		if result != nil {
+			result.Name = user.UnscopePath(result.Name)
+		}
+
 		writeGeneirc(wrt, result, err)
 	})
 
 	mux.HandleFunc("GET /list", func(wrt http.ResponseWriter, req *http.Request) {
 
+		user, err := auth.Authorize(req)
+		if err != nil {
+			writeError(wrt, err)
+			return
+		}
+
 		prefix := req.URL.Query().Get("prefix")
+		scopedPrefix := user.ScopePath(prefix)
 		limit, _ := strconv.Atoi(req.URL.Query().Get("limit"))
 		offset, _ := strconv.Atoi(req.URL.Query().Get("offset"))
 
@@ -155,7 +195,7 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 
 		result, err := storage.List(
 			req.Context(),
-			prefix,
+			scopedPrefix,
 			strings.EqualFold(req.URL.Query().Get("recursive"), "true"),
 			offset,
 			limit,
@@ -164,7 +204,12 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 		if err != nil {
 			slog.Error("Storage: List entries",
 				slog.String("prefix", prefix),
+				slog.String("scope_prefix", scopedPrefix),
 				slog.String("err", err.Error()))
+		}
+
+		for idx, entry := range result {
+			result[idx].Name = user.UnscopePath(entry.Name)
 		}
 
 		writeGeneirc(wrt, result, err)
@@ -172,7 +217,13 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 
 	mux.HandleFunc("POST /move", func(wrt http.ResponseWriter, req *http.Request) {
 
-		name := req.URL.Query().Get("name")
+		user, err := auth.Authorize(req)
+		if err != nil {
+			writeError(wrt, err)
+			return
+		}
+
+		name := user.ScopePath(req.URL.Query().Get("name"))
 		newName := req.URL.Query().Get("new_name")
 
 		result, err := storage.Move(
@@ -189,12 +240,22 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 				slog.String("err", err.Error()))
 		}
 
+		if result != nil {
+			result.Name = user.UnscopePath(result.Name)
+		}
+
 		writeGeneirc(wrt, result, err)
 	})
 
 	mux.HandleFunc("DELETE /delete", func(wrt http.ResponseWriter, req *http.Request) {
 
-		name := req.URL.Query().Get("name")
+		user, err := auth.Authorize(req)
+		if err != nil {
+			writeError(wrt, err)
+			return
+		}
+
+		name := user.ScopePath(req.URL.Query().Get("name"))
 
 		result, err := storage.Delete(
 			req.Context(),
@@ -205,6 +266,10 @@ func NewHandler(storage s4.Storage) s4.SyncHandler {
 			slog.Error("Storage: Delete file",
 				slog.String("name", name),
 				slog.String("err", err.Error()))
+		}
+
+		if result != nil {
+			result.Name = user.UnscopePath(result.Name)
 		}
 
 		writeGeneirc(wrt, result, err)

@@ -88,13 +88,21 @@ func writeData[T any](wrt http.ResponseWriter, val T) error {
 }
 
 func writeError(wrt http.ResponseWriter, err error) error {
-	switch err.(type) {
+	switch err := err.(type) {
 	case *s4.FileNotFoundError:
 		return writeErrorWithCode(wrt, err, http.StatusNotFound)
 	case *s4.FileConflictError:
 		return writeErrorWithCode(wrt, err, http.StatusConflict)
 	case *s4.NameError:
 		return writeErrorWithCode(wrt, err, http.StatusBadRequest)
+	case *AuthError:
+
+		if err.Informational {
+			wrt.Header().Set("WWW-Authenticate", "Basic")
+			return writeErrorWithCode(wrt, err, http.StatusUnauthorized)
+		}
+
+		return writeErrorWithCode(wrt, err, http.StatusForbidden)
 	default:
 		return writeErrorWithCode(wrt, err, http.StatusInternalServerError)
 	}
