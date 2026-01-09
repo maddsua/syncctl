@@ -15,6 +15,10 @@ The system is split into two parts. They talk to each other over a REST API I’
 1. **The Server:** The lonely box that holds your files.
 2. **The Client:** The thing that yells at the server.
 
+Oh, forgot to mention - it's not meant to be secure. At all. All that this thing is really for is uploading my shirtless pictures from my phone to my home lab so that I never lose my precious catfish material collection. Over the local network. Keep that in mind when you realize that all the security measures taken here are more like security suggestions.
+
+That said, if you had any plans to deploy this thing as a public facing service - please reconsider your life choices. At least put it behind a VPN dawg.
+
 ---
 
 ## Deployment (Server)
