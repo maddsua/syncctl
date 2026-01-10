@@ -7,20 +7,19 @@ import (
 
 	"github.com/maddsua/syncctl/cli/config"
 	"github.com/maddsua/syncctl/storage_service/rest_client"
-	"github.com/urfave/cli/v3"
 )
 
-func NewS4RestClient(cfg *config.Config) (*rest_client.RestClient, error) {
+func NewS4RestClient(ctx context.Context, cfg *config.Config) (*rest_client.RestClient, error) {
 
 	if cfg.Remote.RemoteConfig == nil {
-		return nil, cli.Exit("Remote not configured. Use 'set remote url' command to set it", 1)
+		return nil, fmt.Errorf("Remote not configured. Use 'set remote url' command to set it")
 	}
 
 	if remote, ok := cfg.Remote.RemoteConfig.(*config.S4RemoteConfig); ok {
 
 		var check = func(client *rest_client.RestClient) (*rest_client.RestClient, error) {
 
-			if err := client.Ping(context.Background()); err != nil {
+			if err := client.Ping(ctx); err != nil {
 				return client, fmt.Errorf("ping: %v", err)
 			}
 

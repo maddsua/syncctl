@@ -1,6 +1,7 @@
 package rest_client
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,7 +28,7 @@ func (err *NetworkError) Error() string {
 	return err.Message
 }
 
-func prepareRequest(baseUrl string, auth *url.Userinfo, operationMethod, operationPath string, operationParams url.Values, body io.Reader) (*http.Request, error) {
+func prepareRequest(ctx context.Context, baseUrl string, auth *url.Userinfo, operationMethod, operationPath string, operationParams url.Values, body io.Reader) (*http.Request, error) {
 
 	requestURL, err := url.Parse(baseUrl)
 	if err != nil {
@@ -50,7 +51,7 @@ func prepareRequest(baseUrl string, auth *url.Userinfo, operationMethod, operati
 		req.SetBasicAuth(auth.Username(), password)
 	}
 
-	return req, nil
+	return req.WithContext(ctx), nil
 }
 
 func executeRequest(req *http.Request) (*http.Response, error) {

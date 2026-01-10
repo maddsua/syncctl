@@ -56,7 +56,7 @@ func main() {
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 
-					client, err := cliutils.NewS4RestClient(&cfg)
+					client, err := cliutils.NewS4RestClient(ctx, &cfg)
 					if err != nil {
 						return err
 					}
@@ -65,9 +65,9 @@ func main() {
 					localDir := cmd.StringArg("local_dir")
 
 					if remoteDir == "" && localDir == "" {
-						return cli.Exit("Yo! You forgot to tell the thing where to pull them files from!", 1)
+						return fmt.Errorf("Yo! You forgot to tell the thing where to pull them files from!")
 					} else if localDir == "" {
-						return cli.Exit("Good job! Now tell it where to put it to!", 1)
+						return fmt.Errorf("Good job! Now tell it where to put it to!")
 					}
 
 					onConflict := syncctl.ResolvePolicy(cmd.String("conflict"))
@@ -77,11 +77,7 @@ func main() {
 						return err
 					}
 
-					if err := commands.Pull(ctx, client, remoteDir, localDir, onConflict, prune); err != nil {
-						return cli.Exit(err, 1)
-					}
-
-					return nil
+					return commands.Pull(ctx, client, remoteDir, localDir, onConflict, prune)
 				},
 			},
 			{
@@ -109,7 +105,7 @@ func main() {
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 
-					client, err := cliutils.NewS4RestClient(&cfg)
+					client, err := cliutils.NewS4RestClient(ctx, &cfg)
 					if err != nil {
 						return err
 					}
@@ -118,9 +114,9 @@ func main() {
 					remoteDir := cmd.StringArg("remote_dir")
 
 					if remoteDir == "" && localDir == "" {
-						return cli.Exit("Yo! You forgot to tell the thing where to pull them files from!", 1)
+						return fmt.Errorf("Yo! You forgot to tell the thing where to pull them files from!")
 					} else if remoteDir == "" {
-						return cli.Exit("Good job! Now tell it where to put it to!", 1)
+						return fmt.Errorf("Good job! Now tell it where to put it to!")
 					}
 
 					onConflict := syncctl.ResolvePolicy(cmd.String("conflict"))
@@ -130,11 +126,7 @@ func main() {
 						return err
 					}
 
-					if err := commands.Push(ctx, client, localDir, remoteDir, onConflict, prune); err != nil {
-						return cli.Exit(err, 1)
-					}
-
-					return nil
+					return commands.Push(ctx, client, localDir, remoteDir, onConflict, prune)
 				},
 			},
 			{
@@ -157,14 +149,10 @@ func main() {
 
 									inputURL := cmd.StringArg("url")
 									if inputURL == "" {
-										return cli.Exit("Forgot to set the URL itself huh?", 1)
+										return fmt.Errorf("Forgot to set the URL itself huh?")
 									}
 
-									if err := commands.SetRemoteUrl(inputURL, &cfg); err != nil {
-										return cli.Exit(err, 1)
-									}
-
-									return nil
+									return commands.SetRemoteUrl(inputURL, &cfg)
 								},
 							},
 						},
@@ -175,10 +163,7 @@ func main() {
 				Name:  "status",
 				Usage: "Show and check current config",
 				Action: func(ctx context.Context, _ *cli.Command) error {
-					if err := commands.Status(&cfg); err != nil {
-						return cli.Exit(err, 1)
-					}
-					return nil
+					return commands.Status(ctx, &cfg)
 				},
 			},
 		},
@@ -204,7 +189,8 @@ func main() {
 	case err := <-errCh:
 
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err.Error())
+			fmt.Print("\n")
+			fmt.Println(err.Error())
 			os.Exit(1)
 		}
 
@@ -225,7 +211,7 @@ func main() {
 
 func canResolveFileConflicts(onConflict syncctl.ResolvePolicy, prune bool) error {
 	if onConflict == syncctl.ResolveAsCopy && prune {
-		return cli.Exit("How the fuck do you expect it to keep more than one version while also prunnig everything that's not on the remote?????????????", 1)
+		return fmt.Errorf("Dude did you just set both 'prune' flag and 'copy' conflict resolution strategy together?? Talk about sitting on two chairs with one ass huh?!")
 	}
 	return nil
 }

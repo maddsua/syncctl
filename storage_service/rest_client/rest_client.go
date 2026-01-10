@@ -19,7 +19,7 @@ type RestClient struct {
 
 func (client *RestClient) Ping(ctx context.Context) error {
 
-	req, err := prepareRequest(client.RemoteURL, client.Auth, http.MethodGet, "/gen_204", nil, nil)
+	req, err := prepareRequest(ctx, client.RemoteURL, client.Auth, http.MethodGet, "/gen_204", nil, nil)
 	if err != nil {
 		return err
 	}
@@ -50,7 +50,7 @@ func (client *RestClient) Put(ctx context.Context, entry *s4.FileUpload, overwri
 		params.Set("overwrite", "true")
 	}
 
-	req, err := prepareRequest(client.RemoteURL, client.Auth, http.MethodPut, "/upload", params, entry.Reader)
+	req, err := prepareRequest(ctx, client.RemoteURL, client.Auth, http.MethodPut, "/upload", params, entry.Reader)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +71,7 @@ func (client *RestClient) Download(ctx context.Context, name string) (*s4.Readab
 	params := url.Values{}
 	params.Set("name", name)
 
-	req, err := prepareRequest(client.RemoteURL, client.Auth, http.MethodGet, "/download", params, nil)
+	req, err := prepareRequest(ctx, client.RemoteURL, client.Auth, http.MethodGet, "/download", params, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +128,7 @@ func (client *RestClient) Stat(ctx context.Context, name string) (*s4.FileMetada
 	params := url.Values{}
 	params.Set("name", name)
 
-	req, err := prepareRequest(client.RemoteURL, client.Auth, http.MethodGet, "/stat", params, nil)
+	req, err := prepareRequest(ctx, client.RemoteURL, client.Auth, http.MethodGet, "/stat", params, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +146,7 @@ func (client *RestClient) Move(ctx context.Context, name string, newName string,
 		params.Set("overwrite", "true")
 	}
 
-	req, err := prepareRequest(client.RemoteURL, client.Auth, http.MethodPost, "/move", params, nil)
+	req, err := prepareRequest(ctx, client.RemoteURL, client.Auth, http.MethodPost, "/move", params, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +159,7 @@ func (client *RestClient) Delete(ctx context.Context, name string) (*s4.FileMeta
 	params := url.Values{}
 	params.Set("name", name)
 
-	req, err := prepareRequest(client.RemoteURL, client.Auth, http.MethodDelete, "/delete", params, nil)
+	req, err := prepareRequest(ctx, client.RemoteURL, client.Auth, http.MethodDelete, "/delete", params, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +176,7 @@ func (client *RestClient) List(ctx context.Context, prefix string, recursive boo
 		params.Set("recursive", "true")
 	}
 
-	req, err := prepareRequest(client.RemoteURL, client.Auth, http.MethodGet, "/list", params, nil)
+	req, err := prepareRequest(ctx, client.RemoteURL, client.Auth, http.MethodGet, "/list", params, nil)
 	if err != nil {
 		return nil, err
 	}

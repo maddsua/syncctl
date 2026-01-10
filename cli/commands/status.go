@@ -1,13 +1,14 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 
 	cliutils "github.com/maddsua/syncctl/cli/cli_utils"
 	"github.com/maddsua/syncctl/cli/config"
 )
 
-func Status(cfg *config.Config) error {
+func Status(ctx context.Context, cfg *config.Config) error {
 
 	if !cfg.Valid {
 		fmt.Println("[No config found]")
@@ -21,7 +22,7 @@ func Status(cfg *config.Config) error {
 		return nil
 	}
 
-	if _, err := cliutils.NewS4RestClient(cfg); err != nil {
+	if _, err := cliutils.NewS4RestClient(ctx, cfg); err != nil {
 		return fmt.Errorf("Unable to configure client: %v", err)
 	}
 
