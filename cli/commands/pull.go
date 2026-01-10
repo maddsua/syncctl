@@ -15,7 +15,7 @@ import (
 	"github.com/maddsua/syncctl/utils"
 )
 
-func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir string, onconflict syncctl.ResolvePolicy, prune bool) error {
+func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir string, onconflict syncctl.ResolvePolicy, prune, dry bool) error {
 
 	if onconflict == syncctl.ResolveAsCopy {
 		prune = false
@@ -51,9 +51,9 @@ func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir stri
 
 		localPath := path.Join(localDir, strings.TrimPrefix(path.Clean(entry.Name), path.Clean(remoteDir)))
 
-		if err := pullEntry(ctx, client, localPath, onconflict, &entry); err != nil {
-			fmt.Fprintf(os.Stderr, "--X Error pulling '%s':\n", entry.Name)
-			fmt.Fprintf(os.Stderr, "    %v\n", err)
+		if err := pullEntry(ctx, client, localPath, onconflict, &entry, dry); err != nil {
+			fmt.Printf("--X Error pulling '%s':\n", entry.Name)
+			fmt.Printf("    %v\n", err)
 			return fmt.Errorf("Pull aborted")
 		}
 
@@ -62,19 +62,25 @@ func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir stri
 
 	if prune {
 		for name := range pruneMap {
-			if err := os.Remove(name); err != nil {
-				return fmt.Errorf("Unable to prune '%s': %v", name, err)
+			if !dry {
+				if err := os.Remove(name); err != nil {
+					return fmt.Errorf("Unable to prune '%s': %v", name, err)
+				}
 			}
 			fmt.Println("--> Prune", name)
 		}
 	}
 
-	fmt.Println("Pull complete")
+	if !dry {
+		fmt.Println("Pull complete")
+	} else {
+		fmt.Println("Dry run (pull) complete")
+	}
 
 	return nil
 }
 
-func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, onconflict syncctl.ResolvePolicy, entry *s4.FileMetadata) error {
+func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, onconflict syncctl.ResolvePolicy, entry *s4.FileMetadata, dry bool) error {
 
 	if stat, _ := os.Stat(localPath); stat != nil {
 
@@ -92,10 +98,12 @@ func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, o
 				fmt.Printf("--> Up to date '%s'\n", localPath)
 
 				if !stat.ModTime().Equal(entry.Modified) {
-					fmt.Printf("    --> Update mtime '%s'\n", localPath)
-					if err := os.Chtimes(localPath, entry.Modified, entry.Modified); err != nil {
-						return err
+					if !dry {
+						if err := os.Chtimes(localPath, entry.Modified, entry.Modified); err != nil {
+							return err
+						}
 					}
+					fmt.Printf("    --> Update mtime '%s'\n", localPath)
 				}
 
 				return nil
@@ -145,39 +153,42 @@ func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, o
 		fmt.Printf("--> Downloading '%s' (%s)\n", localPath, utils.DataSizeString(float64(entry.Size)))
 	}
 
-	blob, err := client.Download(ctx, entry.Name)
-	if err != nil {
-		return nil
+	if !dry {
+
+		blob, err := client.Download(ctx, entry.Name)
+		if err != nil {
+			return nil
+		}
+
+		localDirName, tempBaseName := path.Split(localPath)
+		if err := os.MkdirAll(localDirName, os.ModePerm); err != nil {
+			return err
+		}
+
+		hasher := sha256.New()
+
+		//	todo: add a progress bar
+
+		tmpFile, err := utils.WriteTempFile(localDirName, tempBaseName, io.TeeReader(blob.ReadCloser, hasher))
+		if err != nil {
+			return err
+		}
+		defer tmpFile.Cleanup()
+
+		if hash := hex.EncodeToString(hasher.Sum(nil)); hash != entry.SHA256 {
+			return fmt.Errorf("content hash mismatch: expected '%s', have '%s'", entry.SHA256, hash)
+		}
+
+		if err := os.Chtimes(tmpFile.Name, blob.Modified, blob.Modified); err != nil {
+			return err
+		}
+
+		if err := os.Rename(tmpFile.Name, localPath); err != nil {
+			return err
+		}
+
+		_ = tmpFile.Release()
 	}
-
-	localDirName, tempBaseName := path.Split(localPath)
-	if err := os.MkdirAll(localDirName, os.ModePerm); err != nil {
-		return err
-	}
-
-	hasher := sha256.New()
-
-	//	todo: add a progress bar
-
-	tmpFile, err := utils.WriteTempFile(localDirName, tempBaseName, io.TeeReader(blob.ReadCloser, hasher))
-	if err != nil {
-		return err
-	}
-	defer tmpFile.Cleanup()
-
-	if hash := hex.EncodeToString(hasher.Sum(nil)); hash != entry.SHA256 {
-		return fmt.Errorf("content hash mismatch: expected '%s', have '%s'", entry.SHA256, hash)
-	}
-
-	if err := os.Chtimes(tmpFile.Name, blob.Modified, blob.Modified); err != nil {
-		return err
-	}
-
-	if err := os.Rename(tmpFile.Name, localPath); err != nil {
-		return err
-	}
-
-	_ = tmpFile.Release()
 
 	return nil
 }

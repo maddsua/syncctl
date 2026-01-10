@@ -56,6 +56,10 @@ func main() {
 						Usage: fmt.Sprintf("How to handle files that already exist locally? [%s]",
 							strings.Join(conflictFlagValue.Options, "|")),
 					},
+					&cli.BoolFlag{
+						Name:  "dry",
+						Usage: "If you want to just watch without touching",
+					},
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 
@@ -66,6 +70,7 @@ func main() {
 
 					remoteDir := cmd.StringArg("remote_dir")
 					localDir := cmd.StringArg("local_dir")
+					dry := cmd.Bool("dry")
 
 					if remoteDir == "" && localDir == "" {
 						return fmt.Errorf("Yo! You forgot to tell the thing where to pull them files from!")
@@ -80,7 +85,7 @@ func main() {
 						return err
 					}
 
-					return commands.Pull(ctx, client, remoteDir, localDir, onConflict, prune)
+					return commands.Pull(ctx, client, remoteDir, localDir, onConflict, prune, dry)
 				},
 			},
 			{
@@ -105,6 +110,10 @@ func main() {
 						Usage: fmt.Sprintf("How to handle files that already exist on the remote? [%s]",
 							strings.Join(conflictFlagValue.Options, "|")),
 					},
+					&cli.BoolFlag{
+						Name:  "dry",
+						Usage: "If you want to just watch without touching",
+					},
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 
@@ -115,6 +124,7 @@ func main() {
 
 					localDir := cmd.StringArg("local_dir")
 					remoteDir := cmd.StringArg("remote_dir")
+					dry := cmd.Bool("dry")
 
 					if remoteDir == "" && localDir == "" {
 						return fmt.Errorf("Yo! You forgot to tell the thing where to pull them files from!")
@@ -129,7 +139,7 @@ func main() {
 						return err
 					}
 
-					return commands.Push(ctx, client, localDir, remoteDir, onConflict, prune)
+					return commands.Push(ctx, client, localDir, remoteDir, onConflict, prune, dry)
 				},
 			},
 			{

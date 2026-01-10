@@ -13,7 +13,7 @@ import (
 	"github.com/maddsua/syncctl/utils"
 )
 
-func Push(ctx context.Context, client s4.StorageClient, localDir, remoteDir string, onconflict syncctl.ResolvePolicy, prune bool) error {
+func Push(ctx context.Context, client s4.StorageClient, localDir, remoteDir string, onconflict syncctl.ResolvePolicy, prune, dry bool) error {
 
 	if onconflict == syncctl.ResolveAsCopy {
 		prune = false
@@ -42,7 +42,7 @@ func Push(ctx context.Context, client s4.StorageClient, localDir, remoteDir stri
 
 		remotePath := path.Join(remoteDir, strings.TrimPrefix(path.Clean(name), path.Clean(localDir)))
 
-		if err := pushEntry(ctx, client, name, remotePath, remoteIndex[remotePath], onconflict); err != nil {
+		if err := pushEntry(ctx, client, name, remotePath, remoteIndex[remotePath], onconflict, dry); err != nil {
 			fmt.Fprintf(os.Stderr, "--X Error pushing '%s':\n", name)
 			fmt.Fprintf(os.Stderr, "    %v\n", err)
 			return fmt.Errorf("Push aborted")
@@ -53,19 +53,25 @@ func Push(ctx context.Context, client s4.StorageClient, localDir, remoteDir stri
 
 	if prune {
 		for key := range remoteIndex {
-			if _, err := client.Delete(ctx, key); err != nil {
-				return fmt.Errorf("Unable to prune '%s': %v", key, err)
+			if !dry {
+				if _, err := client.Delete(ctx, key); err != nil {
+					return fmt.Errorf("Unable to prune '%s': %v", key, err)
+				}
 			}
 			fmt.Println("--> Prune", key)
 		}
 	}
 
-	fmt.Println("Push complete")
+	if !dry {
+		fmt.Println("Push complete")
+	} else {
+		fmt.Println("Dry run (push) complete")
+	}
 
 	return nil
 }
 
-func pushEntry(ctx context.Context, client s4.StorageClient, name, remotePath string, remoteEntry *s4.FileMetadata, onconflict syncctl.ResolvePolicy) error {
+func pushEntry(ctx context.Context, client s4.StorageClient, name, remotePath string, remoteEntry *s4.FileMetadata, onconflict syncctl.ResolvePolicy, dry bool) error {
 
 	stat, err := os.Stat(name)
 	if err != nil {
@@ -141,17 +147,20 @@ func pushEntry(ctx context.Context, client s4.StorageClient, name, remotePath st
 		fmt.Printf("--> Uploading '%s' (%s)\n", remotePath, utils.DataSizeString(float64(stat.Size())))
 	}
 
-	//	todo: add a progress bar
+	if !dry {
 
-	if _, err := client.Put(ctx, &s4.FileUpload{
-		FileMetadata: s4.FileMetadata{
-			Name:     remotePath,
-			Size:     stat.Size(),
-			Modified: stat.ModTime(),
-		},
-		Reader: file,
-	}, onconflict == syncctl.ResolveOverwrite); err != nil {
-		return err
+		//	todo: add a progress bar
+
+		if _, err := client.Put(ctx, &s4.FileUpload{
+			FileMetadata: s4.FileMetadata{
+				Name:     remotePath,
+				Size:     stat.Size(),
+				Modified: stat.ModTime(),
+			},
+			Reader: file,
+		}, onconflict == syncctl.ResolveOverwrite); err != nil {
+			return err
+		}
 	}
 
 	return nil
