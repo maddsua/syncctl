@@ -130,7 +130,11 @@ func pushEntry(ctx context.Context, client s4.StorageClient, name, remotePath st
 				return nil
 			}
 
+		case syncctl.ResolveSkip:
+			return nil
+
 		default:
+			fmt.Printf("--> Skip existing '%s' (diff)\n", remotePath)
 			return nil
 		}
 	} else {

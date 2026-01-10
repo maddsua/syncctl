@@ -133,7 +133,11 @@ func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, o
 				return nil
 			}
 
+		case syncctl.ResolveSkip:
+			return nil
+
 		default:
+			fmt.Printf("--> Skip existing '%s' (diff)\n", localPath)
 			return nil
 		}
 
