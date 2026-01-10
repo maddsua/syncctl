@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"syscall"
 
@@ -39,10 +40,10 @@ func main() {
 				Usage: "Pulls your stupid files from the remote",
 				Arguments: []cli.Argument{
 					&cli.StringArg{
-						Name: "remote_dir",
+						Name: "remote",
 					},
 					&cli.StringArg{
-						Name: "local_dir",
+						Name: "destination",
 					},
 				},
 				Flags: []cli.Flag{
@@ -63,20 +64,32 @@ func main() {
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 
-					client, err := cliutils.NewS4RestClient(ctx, &cfg)
+					destinationDir := cmd.StringArg("destination")
+					if destinationDir == "" {
+						return fmt.Errorf("argument 'destination' not provided")
+					}
+
+					remoteArg := cmd.StringArg("remote")
+					if remoteArg == "" {
+						return fmt.Errorf("argument 'remote' not provided")
+					}
+
+					remoteName, remoteDir, ok := strings.Cut(remoteArg, ":")
+					if !ok {
+						return fmt.Errorf("argument 'remote' must have the following format: 'name:path'")
+					}
+
+					remote, err := cliutils.GetRemote(&cfg, remoteName)
 					if err != nil {
 						return err
 					}
 
-					remoteDir := cmd.StringArg("remote_dir")
-					localDir := cmd.StringArg("local_dir")
-					dry := cmd.Bool("dry")
-
-					if remoteDir == "" && localDir == "" {
-						return fmt.Errorf("Yo! You forgot to tell the thing where to pull them files from!")
-					} else if localDir == "" {
-						return fmt.Errorf("Good job! Now tell it where to put it to!")
+					client, err := cliutils.NewS4RestClient(ctx, remote)
+					if err != nil {
+						return err
 					}
+
+					dry := cmd.Bool("dry")
 
 					onConflict := syncctl.ResolvePolicy(cmd.String("conflict"))
 					prune := cmd.Bool("prune")
@@ -85,7 +98,7 @@ func main() {
 						return err
 					}
 
-					return commands.Pull(ctx, client, remoteDir, localDir, onConflict, prune, dry)
+					return commands.Pull(ctx, client, remoteDir, destinationDir, onConflict, prune, dry)
 				},
 			},
 			{
@@ -93,10 +106,10 @@ func main() {
 				Usage: "Pushes your stupid local files to the remote",
 				Arguments: []cli.Argument{
 					&cli.StringArg{
-						Name: "local_dir",
+						Name: "source",
 					},
 					&cli.StringArg{
-						Name: "remote_dir",
+						Name: "remote",
 					},
 				},
 				Flags: []cli.Flag{
@@ -117,20 +130,32 @@ func main() {
 				},
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 
-					client, err := cliutils.NewS4RestClient(ctx, &cfg)
+					remoteArg := cmd.StringArg("remote")
+					if remoteArg == "" {
+						return fmt.Errorf("argument 'remote' not provided")
+					}
+
+					remoteName, remoteDir, ok := strings.Cut(remoteArg, ":")
+					if !ok {
+						return fmt.Errorf("argument 'remote' must have the following format: 'name:path'")
+					}
+
+					remote, err := cliutils.GetRemote(&cfg, remoteName)
 					if err != nil {
 						return err
 					}
 
-					localDir := cmd.StringArg("local_dir")
-					remoteDir := cmd.StringArg("remote_dir")
-					dry := cmd.Bool("dry")
-
-					if remoteDir == "" && localDir == "" {
-						return fmt.Errorf("Yo! You forgot to tell the thing where to pull them files from!")
-					} else if remoteDir == "" {
-						return fmt.Errorf("Good job! Now tell it where to put it to!")
+					client, err := cliutils.NewS4RestClient(ctx, remote)
+					if err != nil {
+						return err
 					}
+
+					sourceDir := cmd.StringArg("source")
+					if sourceDir == "" {
+						return fmt.Errorf("argument 'source' not provided")
+					}
+
+					dry := cmd.Bool("dry")
 
 					onConflict := syncctl.ResolvePolicy(cmd.String("conflict"))
 					prune := cmd.Bool("prune")
@@ -139,44 +164,150 @@ func main() {
 						return err
 					}
 
-					return commands.Push(ctx, client, localDir, remoteDir, onConflict, prune, dry)
+					return commands.Push(ctx, client, sourceDir, remoteDir, onConflict, prune, dry)
 				},
 			},
 			{
-				Name:  "set",
-				Usage: "Configure settings",
+				Name:  "remote",
+				Usage: "Configure remotes",
 				Commands: []*cli.Command{
 					{
-						Name:  "remote",
-						Usage: "Set remote options",
-						Commands: []*cli.Command{
-							{
-								Name:  "url",
-								Usage: "Set remote url",
-								Arguments: []cli.Argument{
-									&cli.StringArg{
-										Name: "url",
-									},
-								},
-								Action: func(ctx context.Context, cmd *cli.Command) error {
-
-									inputURL := cmd.StringArg("url")
-									if inputURL == "" {
-										return fmt.Errorf("Forgot to set the URL itself huh?")
-									}
-
-									return commands.SetRemoteUrl(inputURL, &cfg)
-								},
+						Name:  "add",
+						Usage: "Add or replace a remote",
+						Arguments: []cli.Argument{
+							&cli.StringArg{
+								Name: "name",
+							},
+							&cli.StringArg{
+								Name: "url",
 							},
 						},
+						Action: func(ctx context.Context, cmd *cli.Command) error {
+
+							name := cmd.StringArg("name")
+							if name == "" {
+								return fmt.Errorf("argument 'name' not provided")
+							}
+
+							url := cmd.StringArg("url")
+							if url == "" {
+								return fmt.Errorf("argument 'url' not provided")
+							}
+
+							_, existed := cfg.Remotes[name]
+
+							remote, err := cliutils.ParseRemoteURL(url)
+							if err != nil {
+								return err
+							}
+
+							if cfg.Remotes == nil {
+								cfg.Remotes = map[string]config.RemoteConfigWrapper{}
+							}
+
+							cfg.Remotes[name] = config.RemoteConfigWrapper{RemoteConfig: remote}
+							cfg.Changed = true
+
+							if !existed {
+								fmt.Println("Remote added")
+							} else {
+								fmt.Println("Remote updated")
+							}
+
+							return nil
+						},
 					},
-				},
-			},
-			{
-				Name:  "status",
-				Usage: "Show and check current config",
-				Action: func(ctx context.Context, _ *cli.Command) error {
-					return commands.Status(ctx, &cfg)
+					{
+						Name:  "remove",
+						Usage: "Remove a remote",
+						Arguments: []cli.Argument{
+							&cli.StringArg{
+								Name: "name",
+							},
+						},
+						Action: func(ctx context.Context, cmd *cli.Command) error {
+
+							name := cmd.StringArg("name")
+							if name == "" {
+								return fmt.Errorf("argument 'name' not provided")
+							}
+
+							if _, ok := cfg.Remotes[name]; !ok {
+								return fmt.Errorf("remote '%s' doesn't exist", name)
+							}
+
+							delete(cfg.Remotes, name)
+							cfg.Changed = true
+							fmt.Println("Remote deleted")
+
+							return nil
+						},
+					},
+					{
+						Name:  "status",
+						Usage: "Show remote status",
+						Arguments: []cli.Argument{
+							&cli.StringArg{
+								Name: "name",
+							},
+						},
+						Action: func(ctx context.Context, cmd *cli.Command) error {
+
+							name := cmd.StringArg("name")
+							if name == "" {
+								return fmt.Errorf("argument 'name' not provided")
+							}
+
+							remote, err := cliutils.GetRemote(&cfg, name)
+							if err != nil {
+								return err
+							}
+
+							fmt.Println("Type:", remote.Type())
+							fmt.Println("URL:", remote.URL())
+
+							if remote, ok := remote.(*config.S4RemoteConfig); ok && remote.Auth != nil {
+								fmt.Println("User:", remote.Auth.Username)
+							} else {
+								fmt.Println("[No user set]")
+							}
+
+							if _, err := cliutils.NewS4RestClient(ctx, remote); err != nil {
+								fmt.Println("Status: Unreachable", err)
+							} else {
+								fmt.Println("Status: Ready")
+							}
+
+							return nil
+						},
+					},
+					{
+						Name:  "list",
+						Usage: "List remotes",
+						Action: func(ctx context.Context, cmd *cli.Command) error {
+
+							fmt.Println("> Config location:", cfg.Location)
+
+							if len(cfg.Remotes) == 0 {
+								fmt.Println("[No remotes]")
+								return nil
+							}
+
+							var names []string
+							for key := range cfg.Remotes {
+								names = append(names, key)
+							}
+							slices.Sort(names)
+
+							for _, name := range names {
+								remote := cfg.Remotes[name]
+								fmt.Printf("%s %s %s\n", name, remote.Type(), remote.URL())
+								return nil
+							}
+
+							return nil
+						},
+					},
 				},
 			},
 		},
@@ -202,7 +333,6 @@ func main() {
 	case err := <-errCh:
 
 		if err != nil {
-			fmt.Print("\n")
 			fmt.Println(err.Error())
 			os.Exit(1)
 		}

@@ -12,13 +12,9 @@ import (
 	"github.com/maddsua/syncctl/utils"
 )
 
-func NewS4RestClient(ctx context.Context, cfg *config.Config) (*rest_client.RestClient, error) {
+func NewS4RestClient(ctx context.Context, cfg config.RemoteConfig) (*rest_client.RestClient, error) {
 
-	if cfg.Remote.RemoteConfig == nil {
-		return nil, fmt.Errorf("remote not configured. Use 'set remote url' command to set it")
-	}
-
-	if remote, ok := cfg.Remote.RemoteConfig.(*config.S4RemoteConfig); ok {
+	if remote, ok := cfg.(*config.S4RemoteConfig); ok {
 
 		client := rest_client.RestClient{
 			RemoteURL: remote.RemoteURL,

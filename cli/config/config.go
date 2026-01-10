@@ -17,10 +17,10 @@ func GetConfigLocation() (string, error) {
 }
 
 type Config struct {
-	Remote   RemoteConfigWrapper `json:"remote"`
-	Valid    bool                `json:"-"`
-	Changed  bool                `json:"-"`
-	Location string              `json:"-"`
+	Remotes  map[string]RemoteConfigWrapper `json:"remotes"`
+	Valid    bool                           `json:"-"`
+	Changed  bool                           `json:"-"`
+	Location string                         `json:"-"`
 }
 
 func (config *Config) Store() error {

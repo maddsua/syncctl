@@ -1,6 +1,7 @@
-package commands
+package cliutils
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 
@@ -8,11 +9,25 @@ import (
 	"github.com/maddsua/syncctl/utils"
 )
 
-func SetRemoteUrl(inputURL string, cfg *config.Config) error {
+func GetRemote(cfg *config.Config, name string) (config.RemoteConfig, error) {
+
+	if len(cfg.Remotes) == 0 {
+		return nil, fmt.Errorf("no remotes configured")
+	}
+
+	remote := cfg.Remotes[name]
+	if remote.RemoteConfig == nil {
+		return nil, errors.New("remote not found")
+	}
+
+	return remote.RemoteConfig, nil
+}
+
+func ParseRemoteURL(inputURL string) (config.RemoteConfig, error) {
 
 	remoteURL, err := url.Parse(inputURL)
 	if err != nil || remoteURL.Scheme == "" || remoteURL.Host == "" {
-		return fmt.Errorf("Invalid url argument")
+		return nil, fmt.Errorf("Invalid url argument")
 	}
 
 	switch remoteURL.Scheme {
@@ -42,7 +57,7 @@ func SetRemoteUrl(inputURL string, cfg *config.Config) error {
 		}
 
 		if err := didYouBringProtection(); err != nil {
-			return err
+			return nil, err
 		}
 
 		baseURL := url.URL{
@@ -63,14 +78,11 @@ func SetRemoteUrl(inputURL string, cfg *config.Config) error {
 			fmt.Println("Setting remote user:", auth.Username)
 		}
 
-		cfg.Remote.RemoteConfig = &config.S4RemoteConfig{
+		return &config.S4RemoteConfig{
 			RemoteURL: baseURL.String(),
 			Auth:      auth,
-		}
-
-		cfg.Changed = true
-		return nil
+		}, nil
 	}
 
-	return fmt.Errorf("Unsupported url")
+	return nil, fmt.Errorf("unsupported url")
 }
