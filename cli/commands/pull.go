@@ -89,34 +89,19 @@ func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, o
 			return err
 		}
 
+		if hash == entry.SHA256 {
+			//	debug: log
+			//	fmt.Printf("--> Up to date '%s'\n", localPath)
+			return nil
+		}
+
 		switch onconflict {
 
-		case syncctl.ResolveOverwrite:
-
-			if hash == entry.SHA256 {
-
-				fmt.Printf("--> Up to date '%s'\n", localPath)
-
-				if !stat.ModTime().Equal(entry.Modified) {
-					if !dry {
-						if err := os.Chtimes(localPath, entry.Modified, entry.Modified); err != nil {
-							return err
-						}
-					}
-					fmt.Printf("    --> Update mtime '%s'\n", localPath)
-				}
-
-				return nil
-			}
-
-			fmt.Printf("--> Updating '%s' (%s)\n", localPath, utils.DataSizeString(float64(entry.Size)))
+		case syncctl.ResolveSkip:
+			fmt.Printf("--> Skip existing '%s' (diff)\n", localPath)
+			return nil
 
 		case syncctl.ResolveAsCopy:
-
-			if hash == entry.SHA256 {
-				fmt.Printf("--> Up to date '%s'\n", localPath)
-				return nil
-			}
 
 			entries, err := os.ReadDir(path.Dir(localPath))
 			if err != nil {
@@ -141,12 +126,8 @@ func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, o
 				return nil
 			}
 
-		case syncctl.ResolveSkip:
-			return nil
-
 		default:
-			fmt.Printf("--> Skip existing '%s' (diff)\n", localPath)
-			return nil
+			fmt.Printf("--> Updating '%s' (%s)\n", localPath, utils.DataSizeString(float64(entry.Size)))
 		}
 
 	} else {

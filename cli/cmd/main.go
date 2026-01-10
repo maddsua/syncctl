@@ -27,10 +27,11 @@ func main() {
 
 	var conflictFlagValue = &cliutils.EnumValue{
 		Options: []string{
-			string(syncctl.ResolveSkip),
 			string(syncctl.ResolveOverwrite),
 			string(syncctl.ResolveAsCopy),
+			string(syncctl.ResolveSkip),
 		},
+		Value: string(syncctl.ResolveOverwrite),
 	}
 
 	cmd := &cli.Command{

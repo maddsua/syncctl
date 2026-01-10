@@ -91,16 +91,17 @@ func pushEntry(ctx context.Context, client s4.StorageClient, name, remotePath st
 
 	if remoteEntry != nil {
 
+		if remoteEntry.SHA256 == hash {
+			//	debug: log
+			//	fmt.Printf("--> Up to date '%s'\n", remotePath)
+			return nil
+		}
+
 		switch onconflict {
 
-		case syncctl.ResolveOverwrite:
-
-			if remoteEntry.SHA256 == hash {
-				fmt.Printf("--> Up to date '%s'\n", remotePath)
-				return nil
-			}
-
-			fmt.Printf("--> Updating '%s' (%s)\n", remotePath, utils.DataSizeString(float64(stat.Size())))
+		case syncctl.ResolveSkip:
+			fmt.Printf("--> Skip existing '%s' (diff)\n", remotePath)
+			return nil
 
 		case syncctl.ResolveAsCopy:
 
@@ -136,13 +137,10 @@ func pushEntry(ctx context.Context, client s4.StorageClient, name, remotePath st
 				return nil
 			}
 
-		case syncctl.ResolveSkip:
-			return nil
-
 		default:
-			fmt.Printf("--> Skip existing '%s' (diff)\n", remotePath)
-			return nil
+			fmt.Printf("--> Updating '%s' (%s)\n", remotePath, utils.DataSizeString(float64(stat.Size())))
 		}
+
 	} else {
 		fmt.Printf("--> Uploading '%s' (%s)\n", remotePath, utils.DataSizeString(float64(stat.Size())))
 	}
