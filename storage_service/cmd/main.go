@@ -21,7 +21,7 @@ import (
 func main() {
 
 	cfgfile := flag.String("config", "/etc/syncctl/server.yml", "Set config file path")
-	dataDir := flag.String("datadir", "", "Where to store your stupid files")
+	dataDir := flag.String("data", "", "Where to store your stupid files")
 
 	flag.Parse()
 
@@ -32,14 +32,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if *dataDir != "" {
-		cfg.DataDir = *dataDir
-	} else if cfg.DataDir == "" {
-		cfg.DataDir = "/var/syncctl/data"
-	}
-
 	storage := blobstorage.Storage{
-		RootDir: cfg.DataDir,
+		RootDir: selectString(*dataDir, os.Getenv("S4_DATA_DIR"), cfg.DataDir, "/var/syncctl/data"),
 	}
 
 	fshandler := rest_handler.NewHandler(&storage, &cfg.AuthConfig)
@@ -51,12 +45,12 @@ func main() {
 
 	plainSrv := http.Server{
 		Handler: &mux,
-		Addr:    fmt.Sprintf(":%d", selectPortNumber(utils.EnvInt("PORT"), cfg.HttpPort, 44_080)),
+		Addr:    fmt.Sprintf(":%d", selectPortNumber(utils.EnvInt("S4_PORT"), cfg.HttpPort, 44_080)),
 	}
 
 	tlsSrv := http.Server{
 		Handler:   &mux,
-		Addr:      fmt.Sprintf(":%d", selectPortNumber(utils.EnvInt("TLS_PORT"), cfg.TlsPort, 44_443)),
+		Addr:      fmt.Sprintf(":%d", selectPortNumber(utils.EnvInt("S4_TLS_PORT"), cfg.TlsPort, 44_443)),
 		TLSConfig: setupSelfSignedTlsOrDie(),
 	}
 
@@ -101,5 +95,11 @@ func main() {
 func selectPortNumber(opts ...int) int {
 	return utils.SelectValue(func(val int) bool {
 		return val > 0 && val < math.MaxUint16
+	}, opts...)
+}
+
+func selectString(opts ...string) string {
+	return utils.SelectValue(func(val string) bool {
+		return val != ""
 	}, opts...)
 }
