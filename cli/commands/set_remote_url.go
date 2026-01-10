@@ -2,10 +2,10 @@ package commands
 
 import (
 	"fmt"
-	"net"
 	"net/url"
 
 	"github.com/maddsua/syncctl/cli/config"
+	"github.com/maddsua/syncctl/utils"
 )
 
 func SetRemoteUrl(inputURL string, cfg *config.Config) error {
@@ -28,15 +28,8 @@ func SetRemoteUrl(inputURL string, cfg *config.Config) error {
 				return nil
 			}
 
-			//	tbh I wanted to use some corny variable names here as well,
-			//	but then it sucks ass to read the code
-			hostname := remoteURL.Host
-			if val, _, err := net.SplitHostPort(hostname); err == nil {
-				hostname = val
-			}
-
 			//	no need for protection if there's only one person doing it
-			if hostname == "localhost" || net.ParseIP(hostname).IsLoopback() {
+			if utils.IsLocalHost(remoteURL.Host) {
 				return nil
 			}
 

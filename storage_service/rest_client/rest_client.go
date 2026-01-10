@@ -2,9 +2,12 @@ package rest_client
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -13,18 +16,66 @@ import (
 )
 
 type RestClient struct {
-	RemoteURL string
-	Auth      *url.Userinfo
+	RemoteURL  string
+	Auth       *url.Userinfo
+	HttpClient http.Client
+}
+
+func (client *RestClient) prepare(ctx context.Context, operationMethod, operationPath string, operationParams url.Values, body io.Reader) (*http.Request, error) {
+
+	requestURL, err := url.Parse(client.RemoteURL)
+	if err != nil {
+		return nil, err
+	}
+
+	requestURL.Path = path.Join(requestURL.Path, s4.UrlPrefixV1, operationPath)
+
+	if operationParams != nil {
+		requestURL.RawQuery = operationParams.Encode()
+	}
+
+	req, err := http.NewRequest(operationMethod, requestURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	if client.Auth != nil && client.Auth.Username() != "" {
+		password, _ := client.Auth.Password()
+		req.SetBasicAuth(client.Auth.Username(), password)
+	}
+
+	return req.WithContext(ctx), nil
+}
+
+func (client *RestClient) exec(req *http.Request) (*http.Response, error) {
+
+	response, err := client.HttpClient.Do(req)
+	if err != nil {
+
+		if err, ok := err.(*url.Error); ok {
+			return nil, &NetworkError{
+				Message:       "api request",
+				OriginalError: errors.Unwrap(err),
+			}
+		}
+
+		return nil, &NetworkError{
+			Message:       "http request",
+			OriginalError: err,
+		}
+	}
+
+	return response, nil
 }
 
 func (client *RestClient) Ping(ctx context.Context) error {
 
-	req, err := prepareRequest(ctx, client.RemoteURL, client.Auth, http.MethodGet, "/gen_204", nil, nil)
+	req, err := client.prepare(ctx, http.MethodGet, "/gen_204", nil, nil)
 	if err != nil {
 		return err
 	}
 
-	response, err := executeRequest(req)
+	response, err := client.exec(req)
 	if err != nil {
 		return err
 	}
@@ -50,7 +101,7 @@ func (client *RestClient) Put(ctx context.Context, entry *s4.FileUpload, overwri
 		params.Set("overwrite", "true")
 	}
 
-	req, err := prepareRequest(ctx, client.RemoteURL, client.Auth, http.MethodPut, "/upload", params, entry.Reader)
+	req, err := client.prepare(ctx, http.MethodPut, "/upload", params, entry.Reader)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +114,7 @@ func (client *RestClient) Put(ctx context.Context, entry *s4.FileUpload, overwri
 		req.Header.Set("If-None-Match", "sha256="+entry.SHA256)
 	}
 
-	return executeJSONRequest[*s4.FileMetadata](req)
+	return unwrapJSON[*s4.FileMetadata](client.exec(req))
 }
 
 func (client *RestClient) Download(ctx context.Context, name string) (*s4.ReadableFile, error) {
@@ -71,19 +122,19 @@ func (client *RestClient) Download(ctx context.Context, name string) (*s4.Readab
 	params := url.Values{}
 	params.Set("name", name)
 
-	req, err := prepareRequest(ctx, client.RemoteURL, client.Auth, http.MethodGet, "/download", params, nil)
+	req, err := client.prepare(ctx, http.MethodGet, "/download", params, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	response, err := executeRequest(req)
+	response, err := client.exec(req)
 	if err != nil {
 		return nil, err
 	}
 
 	if response.StatusCode != http.StatusOK {
 
-		if _, err := parseJSONResponse[any](response); err != nil {
+		if _, err := unwrapJSON[any](response, nil); err != nil {
 			return nil, err
 		}
 
@@ -128,12 +179,12 @@ func (client *RestClient) Stat(ctx context.Context, name string) (*s4.FileMetada
 	params := url.Values{}
 	params.Set("name", name)
 
-	req, err := prepareRequest(ctx, client.RemoteURL, client.Auth, http.MethodGet, "/stat", params, nil)
+	req, err := client.prepare(ctx, http.MethodGet, "/stat", params, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return executeJSONRequest[*s4.FileMetadata](req)
+	return unwrapJSON[*s4.FileMetadata](client.exec(req))
 }
 
 func (client *RestClient) Move(ctx context.Context, name string, newName string, overwrite bool) (*s4.FileMetadata, error) {
@@ -146,12 +197,12 @@ func (client *RestClient) Move(ctx context.Context, name string, newName string,
 		params.Set("overwrite", "true")
 	}
 
-	req, err := prepareRequest(ctx, client.RemoteURL, client.Auth, http.MethodPost, "/move", params, nil)
+	req, err := client.prepare(ctx, http.MethodPost, "/move", params, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return executeJSONRequest[*s4.FileMetadata](req)
+	return unwrapJSON[*s4.FileMetadata](client.exec(req))
 }
 
 func (client *RestClient) Delete(ctx context.Context, name string) (*s4.FileMetadata, error) {
@@ -159,12 +210,12 @@ func (client *RestClient) Delete(ctx context.Context, name string) (*s4.FileMeta
 	params := url.Values{}
 	params.Set("name", name)
 
-	req, err := prepareRequest(ctx, client.RemoteURL, client.Auth, http.MethodDelete, "/delete", params, nil)
+	req, err := client.prepare(ctx, http.MethodDelete, "/delete", params, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return executeJSONRequest[*s4.FileMetadata](req)
+	return unwrapJSON[*s4.FileMetadata](client.exec(req))
 }
 
 func (client *RestClient) List(ctx context.Context, prefix string, recursive bool, offset int, limit int) ([]s4.FileMetadata, error) {
@@ -176,10 +227,10 @@ func (client *RestClient) List(ctx context.Context, prefix string, recursive boo
 		params.Set("recursive", "true")
 	}
 
-	req, err := prepareRequest(ctx, client.RemoteURL, client.Auth, http.MethodGet, "/list", params, nil)
+	req, err := client.prepare(ctx, http.MethodGet, "/list", params, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return executeJSONRequest[[]s4.FileMetadata](req)
+	return unwrapJSON[[]s4.FileMetadata](client.exec(req))
 }
