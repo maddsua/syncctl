@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,6 +15,7 @@ import (
 	"github.com/maddsua/syncctl/storage_service/blobstorage"
 	"github.com/maddsua/syncctl/storage_service/config"
 	"github.com/maddsua/syncctl/storage_service/rest_handler"
+	"github.com/maddsua/syncctl/utils"
 )
 
 func main() {
@@ -36,10 +38,6 @@ func main() {
 		cfg.DataDir = "/var/syncctl/data"
 	}
 
-	if cfg.HttpPort < 80 {
-		cfg.HttpPort = EnvIntOr("PORT", 80)
-	}
-
 	storage := blobstorage.Storage{
 		RootDir: cfg.DataDir,
 	}
@@ -51,20 +49,36 @@ func main() {
 	//	s4 stands for Stipidly-Simple-Storage-Service, btw
 	mux.Handle(s4.UrlPrefixV1, http.StripPrefix(strings.TrimRight(s4.UrlPrefixV1, "/"), fshandler))
 
-	srv := http.Server{
+	plainSrv := http.Server{
 		Handler: &mux,
-		Addr:    fmt.Sprintf(":%d", cfg.HttpPort),
+		Addr:    fmt.Sprintf(":%d", selectPortNumber(utils.EnvInt("PORT"), cfg.HttpPort, 44_080)),
+	}
+
+	tlsSrv := http.Server{
+		Handler:   &mux,
+		Addr:      fmt.Sprintf(":%d", selectPortNumber(utils.EnvInt("TLS_PORT"), cfg.TlsPort, 44_443)),
+		TLSConfig: setupSelfSignedTlsOrDie(),
 	}
 
 	errCh := make(chan error, 2)
 
 	go func() {
 
-		slog.Info("STARTING http server",
-			slog.String("addr", srv.Addr))
+		slog.Info("Note: Starting http server",
+			slog.String("addr", plainSrv.Addr))
 
-		if err := srv.ListenAndServe(); err != nil {
+		if err := plainSrv.ListenAndServe(); err != nil {
 			errCh <- fmt.Errorf("http server: %v", err)
+		}
+	}()
+
+	go func() {
+
+		slog.Info("Note: Starting tls server",
+			slog.String("addr", tlsSrv.Addr))
+
+		if err := tlsSrv.ListenAndServeTLS("", ""); err != nil {
+			errCh <- fmt.Errorf("tls server: %v", err)
 		}
 	}()
 
@@ -74,13 +88,18 @@ func main() {
 	select {
 	case <-exitCh:
 		slog.Info("Note: Exiting...")
-		_ = srv.Close()
+		_ = plainSrv.Close()
+		_ = tlsSrv.Close()
 		fshandler.Wait()
 	case err := <-errCh:
-		if err != nil {
-			slog.Error("SERVER Terminated",
-				slog.String("err", err.Error()))
-			os.Exit(1)
-		}
+		slog.Error("Terminated",
+			slog.String("reason", err.Error()))
+		os.Exit(1)
 	}
+}
+
+func selectPortNumber(opts ...int) int {
+	return utils.SelectValue(func(val int) bool {
+		return val > 0 && val < math.MaxUint16
+	}, opts...)
 }

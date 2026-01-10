@@ -10,6 +10,7 @@ import (
 type ServerConfig struct {
 	DataDir    string `yaml:"data_dir"`
 	HttpPort   int    `yaml:"http_port"`
+	TlsPort    int    `yaml:"tls_port"`
 	AuthConfig `yaml:",inline"`
 }
 
