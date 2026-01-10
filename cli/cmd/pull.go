@@ -1,4 +1,4 @@
-package commands
+package main
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 	"github.com/maddsua/syncctl/utils"
 )
 
-func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir string, onconflict syncctl.ResolvePolicy, prune, dry bool) error {
+func pull_cmd(ctx context.Context, client s4.StorageClient, remoteDir, localDir string, onconflict syncctl.ResolvePolicy, prune, dry bool) error {
 
 	if onconflict == syncctl.ResolveAsCopy {
 		prune = false

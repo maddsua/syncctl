@@ -11,7 +11,6 @@ import (
 
 	"github.com/maddsua/syncctl"
 	cliutils "github.com/maddsua/syncctl/cli/cli_utils"
-	"github.com/maddsua/syncctl/cli/commands"
 	"github.com/maddsua/syncctl/cli/config"
 	"github.com/urfave/cli/v3"
 )
@@ -99,7 +98,7 @@ func main() {
 						return err
 					}
 
-					return commands.Pull(ctx, client, remoteDir, destinationDir, onConflict, prune, dry)
+					return pull_cmd(ctx, client, remoteDir, destinationDir, onConflict, prune, dry)
 				},
 			},
 			{
@@ -165,7 +164,7 @@ func main() {
 						return err
 					}
 
-					return commands.Push(ctx, client, sourceDir, remoteDir, onConflict, prune, dry)
+					return push_cmd(ctx, client, sourceDir, remoteDir, onConflict, prune, dry)
 				},
 			},
 			{
