@@ -39,7 +39,7 @@ func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir stri
 
 	fmt.Println("Fetching remote index...")
 
-	remoteFiles, err := client.List(ctx, remoteDir, true, 0, 0)
+	remoteFiles, err := client.Find(ctx, remoteDir, true, 0, 0)
 	if err != nil {
 		return fmt.Errorf("Unable to fetch remote index: %v", err)
 	} else if len(remoteFiles) == 0 {

@@ -177,7 +177,7 @@ func NewHandler(storage s4.Storage, cfg *config.AuthConfig) s4.SyncHandler {
 		writeGeneirc(wrt, result, err)
 	})
 
-	mux.HandleFunc("GET /list", func(wrt http.ResponseWriter, req *http.Request) {
+	mux.HandleFunc("GET /find", func(wrt http.ResponseWriter, req *http.Request) {
 
 		user, err := auth.Authorize(req)
 		if err != nil {
@@ -193,7 +193,7 @@ func NewHandler(storage s4.Storage, cfg *config.AuthConfig) s4.SyncHandler {
 		wg.Add(1)
 		defer wg.Done()
 
-		result, err := storage.List(
+		result, err := storage.Find(
 			req.Context(),
 			scopedPrefix,
 			strings.EqualFold(req.URL.Query().Get("recursive"), "true"),

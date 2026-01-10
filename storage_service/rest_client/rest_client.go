@@ -218,7 +218,7 @@ func (client *RestClient) Delete(ctx context.Context, name string) (*s4.FileMeta
 	return unwrapJSON[*s4.FileMetadata](client.exec(req))
 }
 
-func (client *RestClient) List(ctx context.Context, prefix string, recursive bool, offset int, limit int) ([]s4.FileMetadata, error) {
+func (client *RestClient) Find(ctx context.Context, prefix string, recursive bool, offset int, limit int) ([]s4.FileMetadata, error) {
 
 	params := url.Values{}
 	params.Set("prefix", prefix)
@@ -227,7 +227,7 @@ func (client *RestClient) List(ctx context.Context, prefix string, recursive boo
 		params.Set("recursive", "true")
 	}
 
-	req, err := client.prepare(ctx, http.MethodGet, "/list", params, nil)
+	req, err := client.prepare(ctx, http.MethodGet, "/find", params, nil)
 	if err != nil {
 		return nil, err
 	}

@@ -211,7 +211,7 @@ func (storage *Storage) Delete(ctx context.Context, name string) (*s4.FileMetada
 	return stat, nil
 }
 
-func (storage *Storage) List(ctx context.Context, prefix string, recursive bool, offset, limit int) ([]s4.FileMetadata, error) {
+func (storage *Storage) Find(ctx context.Context, prefix string, recursive bool, offset, limit int) ([]s4.FileMetadata, error) {
 
 	storage.listLock.Lock()
 	defer storage.listLock.Unlock()

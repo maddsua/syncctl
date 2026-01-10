@@ -22,7 +22,7 @@ func Push(ctx context.Context, client s4.StorageClient, localDir, remoteDir stri
 
 	remoteIndex := map[string]*s4.FileMetadata{}
 
-	if entries, err := client.List(ctx, remoteDir, true, 0, 0); err != nil {
+	if entries, err := client.Find(ctx, remoteDir, true, 0, 0); err != nil {
 		return fmt.Errorf("Unable to fetch remote index: %v", err)
 	} else if len(entries) > 0 {
 		for _, entry := range entries {
@@ -99,7 +99,7 @@ func pushEntry(ctx context.Context, client s4.StorageClient, name, remotePath st
 
 			prefix := strings.TrimSuffix(remotePath, path.Ext(remotePath))
 
-			entries, err := client.List(ctx, prefix, false, 0, 0)
+			entries, err := client.Find(ctx, prefix, false, 0, 0)
 			if err != nil {
 				return err
 			}

@@ -11,7 +11,7 @@ type BaseStorageController interface {
 	Stat(ctx context.Context, name string) (*FileMetadata, error)
 	Move(ctx context.Context, name string, newName string, overwrite bool) (*FileMetadata, error)
 	Delete(ctx context.Context, name string) (*FileMetadata, error)
-	List(ctx context.Context, prefix string, recursive bool, offset int, limit int) ([]FileMetadata, error)
+	Find(ctx context.Context, prefix string, recursive bool, offset int, limit int) ([]FileMetadata, error)
 }
 
 type Storage interface {
