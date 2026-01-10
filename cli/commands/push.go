@@ -89,6 +89,7 @@ func pushEntry(ctx context.Context, client s4.StorageClient, name, remotePath st
 
 		case syncctl.ResolveOverwrite:
 
+			//	todo: fix timestamp check failing
 			if remoteEntry.SHA256 == hash && remoteEntry.Modified.Equal(stat.ModTime()) {
 				fmt.Printf("--> Up to date '%s'\n", remotePath)
 				return nil
@@ -150,7 +151,7 @@ func pushEntry(ctx context.Context, client s4.StorageClient, name, remotePath st
 			Modified: stat.ModTime(),
 		},
 		Reader: file,
-	}, true); err != nil {
+	}, onconflict == syncctl.ResolveOverwrite); err != nil {
 		return err
 	}
 
