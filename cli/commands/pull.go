@@ -39,7 +39,7 @@ func Pull(ctx context.Context, client s4.StorageClient, remoteDir, localDir stri
 
 	fmt.Println("Fetching remote index...")
 
-	remoteFiles, err := client.Find(ctx, remoteDir, true, 0, 0)
+	remoteFiles, err := client.Find(ctx, remoteDir, nil, true, 0, 0)
 	if err != nil {
 		return fmt.Errorf("Unable to fetch remote index: %v", err)
 	} else if len(remoteFiles) == 0 {
@@ -110,11 +110,17 @@ func pullEntry(ctx context.Context, client s4.StorageClient, localPath string, o
 				return nil
 			}
 
-			version, err := utils.NamedFileHighestVersion(localPath)
+			entries, err := os.ReadDir(path.Dir(localPath))
 			if err != nil {
 				return err
 			}
 
+			indexer := utils.NewFileVersionIndexer(localPath)
+			for _, entry := range entries {
+				indexer.Index(entry.Name())
+			}
+
+			version := indexer.Sum()
 			latest := utils.WithFileVersion(localPath, version)
 
 			if hash, err := utils.NamedFileHashSha256(latest); err != nil {

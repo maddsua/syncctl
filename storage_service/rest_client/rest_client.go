@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -218,10 +219,14 @@ func (client *RestClient) Delete(ctx context.Context, name string) (*s4.FileMeta
 	return unwrapJSON[*s4.FileMetadata](client.exec(req))
 }
 
-func (client *RestClient) Find(ctx context.Context, prefix string, recursive bool, offset int, limit int) ([]s4.FileMetadata, error) {
+func (client *RestClient) Find(ctx context.Context, prefix string, filter *regexp.Regexp, recursive bool, offset int, limit int) ([]s4.FileMetadata, error) {
 
 	params := url.Values{}
 	params.Set("prefix", prefix)
+
+	if filter != nil {
+		params.Set("filter", filter.String())
+	}
 
 	if recursive {
 		params.Set("recursive", "true")

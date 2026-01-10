@@ -63,40 +63,25 @@ func WithFileVersion(name string, idx int) string {
 	return name + "-" + strconv.Itoa(idx) + ext
 }
 
-func NamedFileHighestVersion(name string) (int, error) {
-
-	entries, err := os.ReadDir(path.Dir(name))
-	if err != nil {
-		return 0, err
-	} else if len(entries) < 2 {
-		return 1, nil
-	}
-
-	indexer := FileVersionIndexer{BaseName: name}
-
-	for _, entry := range entries {
-		indexer.Index(entry.Name())
-	}
-
-	return indexer.Sum(), nil
+type FileVersionIndexer interface {
+	Index(name string)
+	Sum() int
 }
 
-type FileVersionIndexer struct {
-	//	Original (non-versioned) file name
-	BaseName string
+func NewFileVersionIndexer(baseName string) FileVersionIndexer {
+	suffix := path.Ext(baseName)
+	return &fileVersionIndexerImpl{
+		suffix: suffix,
+		prefix: strings.TrimSuffix(path.Base(baseName), suffix),
+	}
+}
 
+type fileVersionIndexerImpl struct {
 	prefix, suffix string
-	ready          bool
 	values         []int
 }
 
-func (indexer *FileVersionIndexer) Index(name string) {
-
-	if !indexer.ready {
-		indexer.suffix = path.Ext(indexer.BaseName)
-		indexer.prefix = strings.TrimSuffix(path.Base(indexer.BaseName), indexer.suffix)
-		indexer.ready = true
-	}
+func (indexer *fileVersionIndexerImpl) Index(name string) {
 
 	name = path.Base(name)
 
@@ -114,7 +99,7 @@ func (indexer *FileVersionIndexer) Index(name string) {
 	indexer.values = append(indexer.values, idx)
 }
 
-func (indexer *FileVersionIndexer) Sum() int {
+func (indexer *fileVersionIndexerImpl) Sum() int {
 
 	if len(indexer.values) == 0 {
 		return 1

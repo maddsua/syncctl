@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 
 	"github.com/maddsua/syncctl"
@@ -22,7 +23,7 @@ func Push(ctx context.Context, client s4.StorageClient, localDir, remoteDir stri
 
 	remoteIndex := map[string]*s4.FileMetadata{}
 
-	if entries, err := client.Find(ctx, remoteDir, true, 0, 0); err != nil {
+	if entries, err := client.Find(ctx, remoteDir, nil, true, 0, 0); err != nil {
 		return fmt.Errorf("Unable to fetch remote index: %v", err)
 	} else if len(entries) > 0 {
 		for _, entry := range entries {
@@ -97,14 +98,21 @@ func pushEntry(ctx context.Context, client s4.StorageClient, name, remotePath st
 
 		case syncctl.ResolveAsCopy:
 
-			prefix := strings.TrimSuffix(remotePath, path.Ext(remotePath))
+			prefix, basename := path.Split(remotePath)
+			baseExt := path.Ext(basename)
+			basePrefix := strings.TrimSuffix(basename, baseExt)
 
-			entries, err := client.Find(ctx, prefix, false, 0, 0)
+			filter := regexp.MustCompile(
+				fmt.Sprintf("%s-\\d+%s",
+					regexp.QuoteMeta(basePrefix),
+					regexp.QuoteMeta(baseExt)))
+
+			entries, err := client.Find(ctx, prefix, filter, false, 0, 0)
 			if err != nil {
 				return err
 			}
 
-			indexer := utils.FileVersionIndexer{BaseName: remotePath}
+			indexer := utils.NewFileVersionIndexer(remotePath)
 			for _, entry := range entries {
 				indexer.Index(entry.Name)
 			}

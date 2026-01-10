@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -18,41 +19,8 @@ func CleanRelativePath(val string) string {
 	return path.Clean(separator + strings.TrimRight(val, separator))
 }
 
-func BlobPath(root, name string) string {
-	return path.Join(root, CleanRelativePath(name)+FileExtBlob)
-}
-
-func TempBlobPath(root, name string) string {
-	return path.Join(root, CleanRelativePath(name)+".*"+FileExtPartial)
-}
-
-func StripBlobPath(name, root string) string {
-	return path.Clean(strings.TrimSuffix(strings.TrimPrefix(path.Clean(name), path.Clean(root)), FileExtBlob))
-}
-
-func WalkDir(dir string, recursive bool, onFile func(name string) (wantMore bool, err error)) error {
-
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return err
-	}
-
-	for _, entry := range entries {
-		name := path.Join(dir, entry.Name())
-		if entry.IsDir() && recursive {
-			if err := WalkDir(name, recursive, onFile); err != nil {
-				return err
-			}
-		} else if entry.Type().IsRegular() && path.Ext(name) == FileExtBlob {
-			if wantMore, err := onFile(name); err != nil {
-				return err
-			} else if !wantMore {
-				break
-			}
-		}
-	}
-
-	return nil
+func StripPrefix(name, prefix string) string {
+	return strings.TrimPrefix(path.Clean(name), path.Clean(prefix))
 }
 
 type Storage struct {
@@ -211,22 +179,14 @@ func (storage *Storage) Delete(ctx context.Context, name string) (*s4.FileMetada
 	return stat, nil
 }
 
-func (storage *Storage) Find(ctx context.Context, prefix string, recursive bool, offset, limit int) ([]s4.FileMetadata, error) {
+func (storage *Storage) Find(ctx context.Context, prefix string, filter *regexp.Regexp, recursive bool, offset, limit int) ([]s4.FileMetadata, error) {
 
 	storage.listLock.Lock()
 	defer storage.listLock.Unlock()
 
 	dirname := path.Join(storage.RootDir, prefix)
 	if stat, _ := os.Stat(dirname); stat == nil || !stat.IsDir() {
-		dirname = path.Join(storage.RootDir, path.Dir(prefix))
-		if stat, _ = os.Stat(dirname); stat == nil || !stat.IsDir() {
-			return []s4.FileMetadata{}, nil
-		}
-	}
-
-	var filterPrefix string
-	if prefix != "" {
-		filterPrefix = path.Join(storage.RootDir, prefix)
+		return []s4.FileMetadata{}, nil
 	}
 
 	results := make([]s4.FileMetadata, 0)
@@ -234,7 +194,8 @@ func (storage *Storage) Find(ctx context.Context, prefix string, recursive bool,
 
 	var onFile = func(name string) (bool, error) {
 
-		if filterPrefix != "" && !strings.HasPrefix(name, filterPrefix) {
+		normalName := strings.TrimSuffix(name, FileExtBlob)
+		if filter != nil && !filter.MatchString(StripPrefix(normalName, dirname)) {
 			return true, nil
 		}
 
@@ -258,7 +219,7 @@ func (storage *Storage) Find(ctx context.Context, prefix string, recursive bool,
 		}
 
 		results = append(results, s4.FileMetadata{
-			Name:     StripBlobPath(name, storage.RootDir),
+			Name:     StripPrefix(normalName, storage.RootDir),
 			Size:     info.Size,
 			Modified: info.Modified,
 			SHA256:   info.SHA256,
@@ -267,9 +228,34 @@ func (storage *Storage) Find(ctx context.Context, prefix string, recursive bool,
 		return true, nil
 	}
 
-	if err := WalkDir(dirname, recursive, onFile); err != nil {
+	if err := WalkBlobDir(dirname, recursive, onFile); err != nil {
 		return nil, err
 	}
 
 	return results, nil
+}
+
+func WalkBlobDir(dir string, recursive bool, onFile func(name string) (wantMore bool, err error)) error {
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		name := path.Join(dir, entry.Name())
+		if entry.IsDir() && recursive {
+			if err := WalkBlobDir(name, recursive, onFile); err != nil {
+				return err
+			}
+		} else if entry.Type().IsRegular() && path.Ext(name) == FileExtBlob {
+			if wantMore, err := onFile(name); err != nil {
+				return err
+			} else if !wantMore {
+				break
+			}
+		}
+	}
+
+	return nil
 }

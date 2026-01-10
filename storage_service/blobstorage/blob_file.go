@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"strings"
 	"time"
 
 	s4 "github.com/maddsua/syncctl/storage_service"
@@ -17,6 +18,18 @@ import (
 
 const FileExtBlob = ".blob"
 const FileExtPartial = ".part"
+
+func BlobPath(root, name string) string {
+	return path.Join(root, CleanRelativePath(name)+FileExtBlob)
+}
+
+func TempBlobPath(root, name string) string {
+	return path.Join(root, CleanRelativePath(name)+".*"+FileExtPartial)
+}
+
+func OriginalPath(name, root string) string {
+	return path.Clean(strings.TrimSuffix(strings.TrimPrefix(path.Clean(name), path.Clean(root)), FileExtBlob))
+}
 
 const blobKeyMetadata = "metadata"
 const blobKeyData = "data"

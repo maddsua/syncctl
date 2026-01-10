@@ -1,10 +1,12 @@
 package rest_handler
 
 import (
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -190,12 +192,21 @@ func NewHandler(storage s4.Storage, cfg *config.AuthConfig) s4.SyncHandler {
 		limit, _ := strconv.Atoi(req.URL.Query().Get("limit"))
 		offset, _ := strconv.Atoi(req.URL.Query().Get("offset"))
 
+		var filter *regexp.Regexp
+		if val := req.URL.Query().Get("filter"); val != "" {
+			if filter, err = regexp.Compile(val); err != nil {
+				writeErrorWithCode(wrt, fmt.Errorf("invalid filter regexp expression: %v", err), http.StatusBadRequest)
+				return
+			}
+		}
+
 		wg.Add(1)
 		defer wg.Done()
 
 		result, err := storage.Find(
 			req.Context(),
 			scopedPrefix,
+			filter,
 			strings.EqualFold(req.URL.Query().Get("recursive"), "true"),
 			offset,
 			limit,
