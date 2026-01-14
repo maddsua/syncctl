@@ -16,6 +16,7 @@ permissions:
 
 jobs:
   containerize:
+    name: Publish Docker image
     runs-on: ubuntu-latest
     steps:
       - name: 'Checkout'
@@ -31,8 +32,8 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push Docker image
+          
+      - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
