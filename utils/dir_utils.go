@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
 )
 
-func ListAllRegularFiles(name string) ([]string, error) {
+func ListRegilarFiles(name string) ([]string, error) {
 
 	if stat, err := os.Stat(name); err != nil {
 		if err := os.MkdirAll(name, os.ModePerm); err != nil {
@@ -31,24 +32,32 @@ func ListAllRegularFiles(name string) ([]string, error) {
 
 		nextName := path.Join(name, entry.Name())
 
-		if entry.Type().IsRegular() {
+		if entry.Type().IsRegular() && NameListable(entry.Name()) {
 			result = append(result, nextName)
-			continue
-		} else if !entry.IsDir() {
-			continue
-		}
+		} else if entry.IsDir() {
 
-		next, err := ListAllRegularFiles(nextName)
-		if len(next) > 0 {
-			result = append(result, next...)
-		}
+			next, err := ListRegilarFiles(nextName)
+			if len(next) > 0 {
+				result = append(result, next...)
+			}
 
-		if err != nil {
-			return result, err
+			if err != nil {
+				return result, err
+			}
 		}
 	}
 
 	return result, nil
+}
+
+func NameListable(name string) bool {
+
+	switch runtime.GOOS {
+	case "android", "linux":
+		return !strings.HasPrefix(path.Base(name), ".trashed-")
+	}
+
+	return true
 }
 
 func WithFileVersion(name string, idx int) string {

@@ -33,7 +33,7 @@ func push_cmd(ctx context.Context, client s4.StorageClient, localDir, remoteDir 
 
 	fmt.Println("Indexing local files...")
 
-	entries, err := utils.ListAllRegularFiles(localDir)
+	entries, err := utils.ListRegilarFiles(localDir)
 	if err != nil {
 		return fmt.Errorf("Unable to list local files: %v", err)
 	}
