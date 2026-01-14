@@ -26,6 +26,8 @@ BINARY_NAME=cli-$(GOOS)-$(GOARCH)-$(VERSION)
 dist/$(BINARY_NAME):
 	@echo "Building for $(GOOS)/$(GOARCH) (CGO_ENABLED=$(CGO_ENABLED))"
 	mkdir -p dist
-	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) CC=$(CC_PATH) go build -v -ldflags "-s -w" -o dist/$(BINARY_NAME) ./cmd
+	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) CC=$(CC_PATH) \
+		go build -ldflags "-s -w -X github.com/maddsua/syncctl/cli.Version=$(VERSION)" \
+			-v -o dist/$(BINARY_NAME) ./cmd
 
 cli: dist/$(BINARY_NAME)

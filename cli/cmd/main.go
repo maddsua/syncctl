@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime"
 	"slices"
 	"strings"
 	"syscall"
 
 	"github.com/maddsua/syncctl"
+	app "github.com/maddsua/syncctl/cli"
 	cliutils "github.com/maddsua/syncctl/cli/cli_utils"
 	"github.com/maddsua/syncctl/cli/config"
 	"github.com/urfave/cli/v3"
@@ -35,6 +37,23 @@ func main() {
 
 	cmd := &cli.Command{
 		Commands: []*cli.Command{
+			{
+				Name: "version",
+				Action: func(ctx context.Context, _ *cli.Command) error {
+
+					if app.Version == "" {
+						fmt.Println("Syncctl (dev version)")
+						return nil
+					}
+
+					fmt.Printf("Syncctl %s; %s (%s/%s)\n",
+						app.Version,
+						runtime.Version(),
+						runtime.GOOS,
+						runtime.GOARCH)
+					return nil
+				},
+			},
 			{
 				Name:  "pull",
 				Usage: "Pulls your stupid files from the remote",
